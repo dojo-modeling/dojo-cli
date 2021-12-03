@@ -5,7 +5,7 @@ A command-line interface library for black box domain model execution. This libr
 The library has 6 key methods:
 
 - List the latest versions of models.
-- Get parameter metadata for a selected model.
+- Print parameter metadata for a selected model.
 - Run a model via the Docker Python SDK.
 - Check model container status.
 - Get model (docker container) logs.
@@ -14,9 +14,9 @@ The library has 6 key methods:
 
 ## Setup
 
-The CLI requires a configuration file with Docker Hub and DOJO credentials. This filename can be passed with each CLI command, or the default file `.config` will be used.
+The CLI requires a configuration file with Docker Hub and DOJO credentials. This filename can be passed with each CLI command via the `--config` option, or the default file *.config* will be used.
 
-See `example.config` for guidance:
+See *example.config* for guidance:
 ```
 {
     "DOCKERHUB_USER": "",
@@ -27,20 +27,34 @@ See `example.config` for guidance:
 }
 ```
 
-## Running the CLI from source
-
-
-### CLI help:
+## CLI help
 ```
 python dojocli/cli.py --help
-python dojocli/cli.py get-model-params --help
-python dojocli/cli.py list-models --help
-python dojocli/cli.py run-model --help
+python dojocli/cli.py listmodels --help
+python dojocli/cli.py printparams --help
+python dojocli/cli.py runmodel --help
 ```
 
-### List models
+## Available commands
+- [listmodels](#listmodels):   List available models.
+- [printparams](#printparams):  Print the parameters required to run a model.
+- [runmodel](#runmodel):     Run a model.
 
-$ `python dojocli/cli.py list-models` lists the available models e.g.: 
+
+
+
+## listmodels
+
+### Description
+
+List available models.
+
+### Parameters
+- `--config` : name of configuation file; defaults to *.config*
+
+### Example
+
+$ `python dojocli/cli.py listmodels`
 ```
 (1) APSIM
 (2) APSIM-Cropping
@@ -54,31 +68,58 @@ $ `python dojocli/cli.py list-models` lists the available models e.g.:
 ...
 ```
 
-### Get the run parameters of a model
+## printparams
 
-$ `python dojocli/cli.py get-model-params --model_name=CHIRPS-Monthly`
+### Description
 
-This is required before running a model. It will write the parameters for the model CHIRPS-Monthly to `CHIRPS-Monthly_params.txt`:
+Prints model run parameters and writes them as JSON to file.
+
+### Parameters
+- `--model` : name of the model
+- `--config` : name of configuation file; defaults to *.config*
+
+### Example
+
+$ `python dojocli/cli.py printparams --model=CHIRPS-Monthly`
+
+This will print the parameters necessary to run the model CHIRPS-Monthly:
 
 ```
-# Lines starting with # are comments.
-# Model run parameters for CHIRPS-Monthly
-# Example parameters:
-# month: 01
-# year: 2021
-# bbox: [[33.512234, 2.719907], [49.98171,16.501768]]
-#
-# Set run parameter values here:
-name: 
-month: 
-year: 
-bbox: 
+Model run parameters for CHIRPS-Monthly
+#  month  : 01
+#  year  : 2021
+#  bounding_box : [[33.512234, 2.719907], [49.98171,16.501768]]
 ```
 
-To run a model, the parameter values above need to be set, and the parameters filename passed to `run_model`.
+Additionally, `printparams` will write *params_template.json* with example model parameters:
+```
+{" month  ": "01", " year  ": "2021", " bounding_box ": "[[33.512234, 2.719907], [49.98171,16.501768]]"}
+``` 
 
-### Run a model
+## runmodel
 
-$ `python dojocli/cli.py run-model --model_name=CHIRPS-Monthly --params=CHIRPS-Monthly_params.txt`
+### Description
 
-This command will download and run the model docker image.
+Runs the selected model used the specified model parameters.
+
+### Parameters
+- `--model` : name of the model
+- `--config` : name of configuation file; defaults to *.config*
+- `--params` : model parameters in JSON format
+- `--paramsfile` : name of file of model parameters in JSON format; defaults to *params_template.json*.
+- `--outputdir` : folder specified for model output files; defaults to  */runs/{model}/{datetime}* e.g. */dojo-cli/runs/CHIRTSmax-Monthly/20210403110420*.
+
+To run a model, the parameter values should either be assigned via the `--params` option , or a json file specified via the `--paramsfile` option. If neither parameter option is set, the --paramsfile filename *params_template.json* will be used.
+
+### Examples
+
+(1) Run the CHIRPS-Monthly model using the default configuration settings in *.config* and model parameters in *params_template.json*:
+
+- ```python dojocli/cli.py runmodel --model=CHIRPS-Monthly```
+
+(2) Run the CHIRPS-Monthly model using the default configuration settings in *.config* and model parameters in *chirps-monthly.json*:
+- ```python dojocli/cli.py runmodel --model=CHIRPS-Monthly --paramsfile=chirps-monthly.json```
+
+(3) Run the CHIRPS-Monthly model using the default configuration settings in *.config* and specified model parameters:
+- ```python dojocli/cli.py runmodel --model=CHIRPS-Monthly --params='{"month": "09", "year": "2016", "bounding_box": "[[33.512234, 2.719907], [49.98171,16.501768]]"}'```
+

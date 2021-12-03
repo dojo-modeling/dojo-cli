@@ -3,8 +3,15 @@
 """
 
 from docker_client import DockerClient
+from datetime import datetime
+from jinja2 import Template
 import json
+import os
 import requests
+
+# Image query parameter for /models e.g. "jataware/dojo" below
+# url = f'{self.dojo_url}/models?query=image:"jataware/dojo" AND NOT _exists_:"next_version"&size=1000'
+IMAGE_QUERY_NAME = "jataware" #"jataware/dojo"
 
 class DojoClient(object):
 
@@ -35,8 +42,7 @@ class DojoClient(object):
             jataware/dojo-publish.
 
         """
-
-        url = f'{self.dojo_url}/models?query=image:"jataware/dojo" AND NOT _exists_:"next_version"&size=1000'
+        url = f'{self.dojo_url}/models?query=image:"{IMAGE_QUERY_NAME}" AND NOT _exists_:"next_version"&size=1000'
         response = self.generic_dojo_get_request(url)
         try:
             resp = response.json()
@@ -52,7 +58,7 @@ class DojoClient(object):
             if hasattr(e, 'message'):
                 print(e.message + '\n' + response.text)
             else:
-                print(e + '\n' + response.text)
+                print(response.text)
             exit
 
     def get_dojo_stuff(self, stuff, model_id):
@@ -112,7 +118,7 @@ class DojoClient(object):
         
         return metadata
 
-    def get_model_info(self, model_name):
+    def get_model_info(self, model_name: str):
         """
             Get the model_id and image_name based on the model_name. 
             Restrict query to models with a jataware image and "next_version":null.
@@ -122,7 +128,7 @@ class DojoClient(object):
             tuple: (model_id, image_name)
         """
 
-        url = f'{self.dojo_url}/models?query=name:"{model_name}" AND image:"jataware/dojo" AND NOT _exists_:"next_version"'
+        url = f'{self.dojo_url}/models?query=name:"{model_name}" AND image:"{IMAGE_QUERY_NAME}" AND NOT _exists_:"next_version"'
         response = self.generic_dojo_get_request(url)
         try:
             resp = response.json()
@@ -142,29 +148,109 @@ class DojoClient(object):
             else:
                 print(e)
             exit
+        
+    def run_model(self, model_name: str, params: str = None, params_filename: str = None, local_output_folder: str = None):
+        """
+        Description
+        -----------
+            Runs the selected model. Gets metadata from the dojo api, builds
+            the volume mounts, and uses docker_client.py to download and run
+            the image. Finally, it executes the model directive.
 
-    def run_model(self, model_name, params_filename):
+        Parameters
+        ----------
+            model_name: str
+                Name of the model to run e.g. CHIRPS-Monthly
+            
+            params: str
+                JSON of model parameters.
+
+            params_filename: str
+                If params if not passed, model parameters JSON is loaded from this file.
+
+            local_output_folder: str
+                Local folder where model output is written.
+
+        """
+
+        # Use default folder if not specified.
+        if local_output_folder == None:
+            local_output_folder = f'{os.getcwd()}/runs/{model_name}/{datetime.today().strftime("%Y%M%d%H%M%S")}'
+        
+        # Create directory structure.
+        os.makedirs(local_output_folder)
 
         # Get the metadata for this model. This sets self.image_name.
         metadata = self.get_metadata(model_name)
-        params = self.set_run_params(params_filename)
+        
+        ### Begin building the array of volume mounts.
+        volume_array = []
 
-        # set run command from metadata["directive"]["command"] and substitute params.
+        # we have to be careful since we cannot mount the same directory (within the model container) more than once
+        # so if multiple output files reside in the same directory (which is common), we need to re-use that volume mount
+        output_dirs = {}
+
+        # Process output file locations.
+        outputfiles = metadata["outputfile"]
+        for output in outputfiles:
+            # build a volume mount for this output file's directory
+            output_dir = output['output_directory']
+            output_id = output['id']
+
+            
+            if output_dir not in output_dirs:
+                output_dirs[output_dir] = output_id
+
+            # use the lookup to build the path
+            output_dir_volume = local_output_folder + f"/{output_dirs[output_dir]}:{output_dir}"               
+            #print('output_dir_volume:' + output_dir_volume)
+
+            # add it to the volume_array
+            volume_array.append(output_dir_volume)
+
+        # Process accessory file locations.
+        accessory_files = metadata["accessories"]
+        accessory_dirs = {}
+        for accessory_file in accessory_files:
+            # build a volume mount for this accessory file's directory
+            accessory_dir = os.path.split(accessory_file['path'])[0] #exclude file name
+            accessory_id = accessory_file['id']
+
+            if accessory_dir not in accessory_dirs:
+                accessory_dirs[accessory_dir] = accessory_id
+
+                # use the lookup to build the path
+                accessory_dir_volume = local_output_folder + f"/accessories:{accessory_dir}"
+                volume_array.append(accessory_dir_volume)
+
+        # Set run command from metadata["directive"]["command"] and substitute params.
+        if params == None:
+            # If params json not passed then read from file.
+            with open(params_filename, "r") as fh:
+                params = json.load(fh)
+
+        model_command = Template(metadata["directive"]["command"])
+        model_command = model_command.render(params)
 
         dc = DockerClient(self.dockerhub_user, self.dockerhub_pwd)
         
-        # pull the image
+        # Pull the image
         dc.pull_image(self.image_name)
 
         # create the container
-        container_name = dc.create_container(self.image_name)
-        print(f"Created container {container_name}")
+        container_name = dc.create_container(self.image_name, volume_array)
+        print(f"Created container {container_name} with volumne_array {volume_array}")
 
+        # Work around for following:
+        # the volume_array output folders in the docker container are owned by root, not clouseau.
+        for v in volume_array:
+            sa = v.split(":")
+            folder = sa[1]
+            dc.execute_command(f'sudo chown clouseau:clouseau {folder}')
+
+        # Execute the model_command.
+        dc.execute_command(model_command)
         
-
-
-        
-
     def set_config(self, config_filename):
         with open(config_filename) as f:
             config = json.load(f)
@@ -176,15 +262,6 @@ class DojoClient(object):
             # Set DockerHub url and credentials.
             self.dockerhub_pwd = config["DOCKERHUB_PWD"]
             self.dockerhub_user = config["DOCKERHUB_USER"]
-
-    def set_run_params(self, params_filename):
-        params = {}
-        with open(params_filename, 'r') as f:
-            for l in f.readlines():
-                if not l.startswith("#"):
-                    sa = l.split(":")
-                    params[sa[0]] = str(sa[1]).strip()
-        return params
 
     def test_docker(self):
         dc = DockerClient(self.dockerhub_user, self.dockerhub_pwd)
