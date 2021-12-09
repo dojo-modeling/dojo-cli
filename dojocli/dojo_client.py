@@ -204,20 +204,21 @@ class DojoClient(object):
 
         # We have to be careful since we cannot mount the same directory (within the model container) more than once
         # so if multiple output files reside in the same directory (which is common), we need to re-use that volume mount
-        output_dirs = {}
+        output_dirs = set()
 
         # Process output file locations.
         outputfiles = metadata["outputfile"]
         for output in outputfiles:
             # Build a volume mount for this output file's directory.
             output_dir = output['output_directory']
-            output_id = output['id']
+            #output_id = output['id']
 
             if output_dir not in output_dirs:
-                output_dirs[output_dir] = output_id
-
+                #output_dirs[output_dir] = output_id
+                output_dirs.add(output_dir)
                 # Use the lookup to build the path.
-                output_dir_volume = local_output_folder + f"/{output_dirs[output_dir]}:{output_dir}"               
+                #output_dir_volume = local_output_folder + f"/{output_dirs[output_dir]}:{output_dir}"
+                output_dir_volume = local_output_folder + f"/output:{output_dir}"               
                 # Add it to the volume_array
                 volume_array.append(output_dir_volume)
 

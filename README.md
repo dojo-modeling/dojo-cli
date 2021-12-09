@@ -234,7 +234,7 @@ After processing `runmodel` will print the local directory where the model outpu
 /runs
  | - Stochastic Gridded Conflict Model
     |- 20211209160543
-       |- 77bd4e59-7ef5-428d-b42a-6d327a7244e1
+       |- output
           |- conflict_IDs.rti
           |- ...
        |- acessorries

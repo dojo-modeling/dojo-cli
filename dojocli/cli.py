@@ -218,7 +218,6 @@ def printoutputs(model, config):
     model_dict = dc.get_model_info(model)
     model_id = model_dict["id"]
     outputfile_dict = dc.get_outputfiles(model_id)
-
     # Call a seperate print_params function to keep things clean.
     print_outputfiles(model, outputfile_dict)
 
