@@ -34,7 +34,7 @@ setup(
     description="A command-line interface for black box model execution.",
     entry_points={
         "console_scripts": [
-            "dojo-cli=dojocli.cli:cli",
+            "dojocli=dojocli.cli:cli",
         ],
     },
     #setup_requires=["numpy>=1.20.1"],  # This is not working as expected
@@ -45,8 +45,8 @@ setup(
     include_package_data=True,
     keywords="dojo-cli",
     name="dojo-cli",
-    package_data={'dojo-cli' : ['data/*']},
-    packages=find_packages(include=["dojo-cli", "dojo-cli.*"]),
+    package_data={'dojocli' : ['data/*']},
+    packages=find_packages(include=["dojocli", "dojocli.*"]),
     test_suite="tests",
     url="https://github.com/jataware/dojo-cli",
     version='0.1.0',
