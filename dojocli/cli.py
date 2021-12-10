@@ -149,12 +149,12 @@ def print_params(model: str,  model_dict: dict, metadata: str, params_filename: 
                 if param_type == 'float':
                     try:
                         output_params[param_name] = float(param_value)
-                    except:
+                    except Exception:
                         output_params[param_name] = param_value
                 elif param_type == 'int':
                     try:
                         output_params[param_name] = int(param_value)
-                    except:
+                    except Exception:
                         output_params[param_name] = param_value
                 else:             
                     output_params[param_name] = param_value

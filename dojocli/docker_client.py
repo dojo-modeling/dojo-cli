@@ -35,12 +35,35 @@ class DockerClient(object):
         sa = image_name.split(":")
         repo = sa[0]
         tag = sa[1]
-        #tqdm(self.client.api.pull(repo, tag, True, self.auth_config, decode=True))
-        #for line in tqdm(self.client.api.pull(repo, tag, True, self.auth_config, decode=True)):
-        for line in tqdm(self.client.api.pull(repo, tag, True,  decode=True)):
-           print(json.dumps(line, indent=4))
-            # TODO: Progress Bar
-               
+
+        t_lookup = {}
+        position_counter = -1
+        for line in self.client.api.pull(repo, tag, True,  decode=True): 
+            status = line["status"]
+            lineid = line["id"] if "id" in line else None
+            progress = line["progress"] if "progress" in line else None    
+
+            # Set t.
+            if lineid is None:
+                position_counter += 1
+                t = tqdm(position = position_counter, bar_format='{desc}')
+            elif not lineid in t_lookup:
+                position_counter += 1
+                t = tqdm(position = position_counter, bar_format='{desc}')
+                t_lookup[lineid] = t
+            else:
+                t = t_lookup[lineid]
+
+            if (progress == None):
+                if lineid == None:
+                    text = status
+                else:
+                    text = f'{lineid:<} {status}  '
+            else:
+                text = f'{lineid:<} {status} {progress}'
+
+            t.set_description_str(text)
+   
     def create_container(self, image_name, volume_array, container_name):
         """
         Description

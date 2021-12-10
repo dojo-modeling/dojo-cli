@@ -266,12 +266,13 @@ class DojoClient(object):
         dc = DockerClient()
         
         # Pull the image
+        print(f'Getting model image ...\n')
         dc.pull_image(image_name)
 
         # create the container
         container_name = re.sub("[ ]", '', model_name.lower() ).strip() + datetimestamp
 
-        print(f"Creating container {container_name} with volume_array {volume_array}")
+        print(f"Creating container {container_name} with volume_array {volume_array}\n")
         
         container_name = dc.create_container(image_name, volume_array, container_name)
         
