@@ -210,7 +210,7 @@ Additionally, `printparams` will write *params_template.json* with example model
 {
     "month": 1,
     "year": 2021,
-    "bounding_box": "'[[33.512234, 2.719907], [49.98171,16.501768]]'"
+    "bounding_box": "[[33.512234, 2.719907], [49.98171,16.501768]]"
 }
 ``` 
 

@@ -270,6 +270,3 @@ def runmodel(model, config, paramsfile, params, outputdir: str = None):
 
 if __name__ == "__main__":     
     cli()
-    #printparams(model="dummy-model", config=".config")
-    #listmodels(config=".config")
-    #runmodel(model="dummy-model", config=".config", params="dummy-model_params.txt")

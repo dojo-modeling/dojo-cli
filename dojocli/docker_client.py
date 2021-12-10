@@ -1,6 +1,5 @@
 
 import docker
-import json
 from tqdm import tqdm
 
 class DockerClient(object):
@@ -32,10 +31,21 @@ class DockerClient(object):
                 e.g. jataware/dojo-publish:CHIRPS-Monthly-latest
         """
 
+        # Bulid the Docker Hub repo and tag from the image name.
         sa = image_name.split(":")
         repo = sa[0]
         tag = sa[1]
 
+        # Use tqdm for progress bar handling. client.api.pull streams JSON
+        # strings in line below e.g.:
+        # {'status': 'Pulling from jataware/dojo-publish', 'id': 'AgMIPSeasonalCropEmulator-latest'}
+        # {'status': 'Already exists', 'progressDetail': {}, 'id': '16ec32c2132b'}
+        # {'status': 'Pulling fs layer', 'progressDetail': {}, 'id': '2a7e5d7d51a6'}
+        # {'status': 'Waiting', 'progressDetail': {}, 'id': '360694784144'}
+        # {'status': 'Downloading', 'progressDetail': {'current': 2724336, 'total': 7717464}, 
+        #       'progress': '[=================>                                 ]  2.724MB/7.717MB', 'id': 'a473cbaea391'}
+        
+        # Create a tqdm object for each line id.
         t_lookup = {}
         position_counter = -1
         for line in self.client.api.pull(repo, tag, True,  decode=True): 
@@ -43,7 +53,8 @@ class DockerClient(object):
             lineid = line["id"] if "id" in line else None
             progress = line["progress"] if "progress" in line else None    
 
-            # Set t.
+            # Set the tqdm instance t based on the line id if present.
+            # The position parameter dictates the line offest of the tqdm object.
             if lineid is None:
                 position_counter += 1
                 t = tqdm(position = position_counter, bar_format='{desc}')
@@ -54,6 +65,7 @@ class DockerClient(object):
             else:
                 t = t_lookup[lineid]
 
+            # Set the progress message text.
             if (progress == None):
                 if lineid == None:
                     text = status
@@ -62,6 +74,7 @@ class DockerClient(object):
             else:
                 text = f'{lineid:<} {status} {progress}'
 
+            # Set the description str referred by bar_format-'{desc}' in t.
             t.set_description_str(text)
    
     def create_container(self, image_name, volume_array, container_name):
