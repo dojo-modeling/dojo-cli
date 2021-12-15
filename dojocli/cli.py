@@ -338,11 +338,14 @@ def versions(model, config):
 @click.option("--paramsfile", type=str, default="params_template.json", help="model run parameters filename")
 @click.option("--params", type=str, default=None, help='json parameters e.g. --params=\{"temp": 0.05\}')
 @click.option("--outputdir", type=str, default=None, help="model output directory")
-def runmodel(model, config, paramsfile, params, outputdir: str = None):
+@click.option("--version", type=str, default=None, help="optional version id e.g. ceedd3b0-f48f-43d2-b279-d74be695ed1c")
+@click.option("--attached", type=str, default=True, help="wait for model completion")
+
+def runmodel(model, config, paramsfile, params, outputdir: str = None, version: str = None, attached: bool = True):
     """Run a model."""
 
-    if model==None:
-        click.echo("\n--model is a required option.\n")
+    if (model is None and version is None):
+        click.echo('\neither --model or --version is required.\n')
         return
     elif params==None:
         # If --params json is not passed, then --paramsfile, or the default --paramsfile, must exist.
@@ -351,12 +354,15 @@ def runmodel(model, config, paramsfile, params, outputdir: str = None):
             click.echo("\n--paramfile not found and --params is blank.\nOne of either --paramfile or --params is required.\n")
             return
 
-    click.echo(f"\nRunning \"{model}\" ...\n")
+    if version is None:
+        click.echo(f"\nRunning \"{model}\" ...\n")
+    else:
+        click.echo(f"\nRunning model version \"{version}\" ...\n")
 
     dc = DojoClient(config)
-    dc.run_model(model, params, paramsfile, local_output_folder = outputdir)
+    dc.run_model(model, params, paramsfile, version, local_output_folder = outputdir, run_attached=attached)
 
 
 if __name__ == "__main__":     
     cli()
-    #runmodel(model="CHIRPS-Monthly", params=None, config=".config", paramsfile="params_template.json", outputdir=None)
+    #runmodel(model="CHIRPS-GEFS Monthly", params=None, config=".config", paramsfile="params_template.json", outputdir=None, attached=True)

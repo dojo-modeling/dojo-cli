@@ -2,17 +2,13 @@
   Dojo-cli client for dojo api.
 """
 
-from dojocli.docker_client import DockerClient
 from datetime import datetime
+from dojocli.docker_client import DockerClient
 from jinja2 import Template
 import json
 import os
 import re
 import requests
-
-# Image query parameter for /models e.g. "jataware/dojo" below
-# url = f'{self.dojo_url}/models?query=image:"jataware/dojo" AND NOT _exists_:"next_version"&size=1000'
-IMAGE_QUERY_NAME = "jataware" #"jataware/dojo"
 
 class DojoClient(object):
 
@@ -221,11 +217,12 @@ class DojoClient(object):
                 print(e)
             exit
 
-    def run_model(self, model_name: str, params: str = None, params_filename: str = None, local_output_folder: str = None):
+    def run_model(self, model_name: str, params: str = None, params_filename: str = None, version: str = None, 
+        local_output_folder: str = None, run_attached: bool = True):
         """
         Description
         -----------
-            Runs the selected model. Gets metadata from the dojo api, builds
+            Runs the selected model or model_id. Gets metadata from the dojo api, builds
             the volume mounts, and uses docker_client.py to download and run
             the image. Finally, it executes the model directive.
 
@@ -240,21 +237,28 @@ class DojoClient(object):
             params_filename: str
                 If params if not passed, model parameters JSON is loaded from this file.
 
+            version: str = None
+                The specific model_id (or "version") to run. Overrides model_name.
+
             local_output_folder: str
                 Local folder where model output is written.
+
+            run_attached: bool = True
+                Option to run the model detached (in background.)
 
         """
 
         # Use default folder if not specified.
         datetimestamp = datetime.today().strftime("%Y%m%d%H%M%S")
         if local_output_folder == None:
-            local_output_folder = f'{os.getcwd()}/runs/{model_name}/{datetimestamp}'
+
+            local_output_folder = f'{os.getcwd()}/runs/{model_name if model_name is not None else version}/{datetimestamp}'
         
         # Create directory structure.
         os.makedirs(local_output_folder)
 
-        # Get the model_id from the model_name
-        model_dict = self.get_model_info(model_name)
+        # Get the model_id and image from the model_name or version.
+        model_dict = self.get_model_info(model_name, model_id=version)
         model_id = model_dict["id"]
         image_name = model_dict["image"]
 
@@ -322,47 +326,65 @@ class DojoClient(object):
             with open(f'{local_output_folder}/accessories-captions.json', 'w') as fh:
                 json.dump(accessory_captions, fh, indent=4)
 
-        model_command = Template(metadata["directive"]["command"])
-        model_command = model_command.render(params)
-
+        
+        # Instantiate the Docker Client.
         dc = DockerClient()
         
         # Pull the image
         print(f'Getting model image ...\n')
         dc.pull_image(image_name)
 
-        # create the container
-        container_name = re.sub("[ ]", '', model_name.lower() ).strip() + datetimestamp
-
-        print(f"Creating container {container_name} with volume_array {volume_array}\n")
-        
-        container_name = dc.create_container(image_name, volume_array, container_name)
-        
-        dc.execute_command("logger -s running the container now")
-        print('logs:', dc.container.logs())
+        # Begin constructing the command to pass when running the container.
+        container_command = 'bash -c "'
 
         # Work around for following:
         # the volume_array output folders in the docker container are owned by root, not clouseau.
-        commands = []
+        # Add these chown commands to the container_command.
         for v in volume_array:
             sa = v.split(":")
             folder = sa[1]
-            dc.execute_command(f'sudo chown clouseau:clouseau {folder}')
-            #commands.append(f'sudo chown clouseau:clouseau {folder}')
+            container_command = container_command + f'sudo chown clouseau:clouseau {folder} && '
 
-        # Execute the model_command.
-        dc.execute_command(model_command)
-        #commands.append(model_command)
-
-        dc.execute_command("logger -s testing the logs")
-        print('logs:', dc.container.logs())
-
-        stuff = dc.api_client.logs(dc.container.name, stdout=True, stderr=True, stream=False, timestamps=True)
+        # Add the model_command with a trailing quote (") to the container command.
+        model_command = Template(metadata["directive"]["command"])
+        model_command = model_command.render(params)
+        container_command = container_command + f'{model_command}"'
         
-        print("stuff:", stuff)
+        # Create the container name.
+        if model_name is None:
+            container_name = version[-12:] + datetimestamp
+        else:
+            container_name = re.sub("[ \]\[,()_]", '', model_name.lower() ).strip() + datetimestamp
 
-        print(f"\nCreated container {container_name}.")
-        print(f"\nModel output and run-parameters files are located in {local_output_folder}.")
+        # TODO: better explanations here.
+        if run_attached:
+            print(f"\nRunning model in Docker container {container_name} ... \n")
+            print(f"the model is running attached ... ")
+
+            # Run the container.
+            logs = dc.create_container(image_name, volume_array, container_name, container_command)
+            
+            # Write the logs returned from the attached container.
+            with open(f'{local_output_folder}/logs.txt', 'w') as fh:
+                fh.writelines(logs)
+
+        else:
+            print(f"the model is running deattached ... ")
+        
+            # Run the container.
+            dc.create_container(image_name, volume_array, container_name, container_command, runattached=False)
+            
+            # Write the logs, but these will probably be incomplete for the detached container.
+            logs = dc.get_logs(container_name)
+            with open(f'{local_output_folder}/logs.txt', 'wb') as fh:
+                fh.write(logs)
+
+        # Remove the container if running attached. Autoremove = False because 
+        # the logs aren't streaming.
+        #if run_attached:
+        #    dc.remove_container(container_name)
+
+        print(f"\nModel output, run-parameters, and log files are located in {local_output_folder}.")
 
     def set_config(self, config_filename):
         with open(config_filename) as f:
