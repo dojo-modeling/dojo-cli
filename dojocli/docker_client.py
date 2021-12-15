@@ -101,7 +101,7 @@ class DockerClient(object):
         
         """
         # detach defautls to False
-        #self.container = self.client.containers.run(image_name, command='bash', stdin_open=True, stdout=True, detach=True, volumes=volume_array, name=container_name)
+        self.container = self.client.containers.run(image_name, command='bash', stdin_open=True, stdout=True, detach=True, volumes=volume_array, name=container_name)
         #self.container = self.client.containers.run(image_name, 'logger gah gah')
         #print(self.container)
         # command=["/bin/sh", "-c", "echo gah && logger gah"]
@@ -113,9 +113,9 @@ class DockerClient(object):
             'bash -c "sudo chown clouseau:clouseau /home/clouseau/Emulator-WorldModelers/output && Rscript wm_agmip_emulator.R Maize -33.75 35.75 -0.25 59.25 0.0 0.0"'
             , stdin_open=True, stdout=True, detach=False, volumes=volume_array, name=container_name)
         
-        print(f"\n\nreturned logs for {container_name}\n\n: {self.container}")
+        #print(f"\n\nreturned logs for {container_name}\n\n: {self.container}")
 
 
-        print(f"\n\nget lgos: \n\n {self.api_client.logs(container_name)}")
+        #print(f"\n\nget lgos: \n\n {self.api_client.logs(container_name)}")
 
         return self.container.name
