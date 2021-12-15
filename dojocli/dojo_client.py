@@ -351,7 +351,7 @@ class DojoClient(object):
             #commands.append(f'sudo chown clouseau:clouseau {folder}')
 
         # Execute the model_command.
-        #dc.execute_command(model_command)
+        dc.execute_command(model_command)
         #commands.append(model_command)
 
         dc.execute_command("logger -s testing the logs")

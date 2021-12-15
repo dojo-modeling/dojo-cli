@@ -109,9 +109,9 @@ class DockerClient(object):
 
         #self.container = self.client.containers.run(image_name, "/bin/sh", stdin_open=True, stdout=True, detach=True, volumes=volume_array, name=container_name)
         
-        self.container = self.client.containers.run(image_name, 
-            'bash -c "sudo chown clouseau:clouseau /home/clouseau/Emulator-WorldModelers/output && Rscript wm_agmip_emulator.R Maize -33.75 35.75 -0.25 59.25 0.0 0.0"'
-            , stdin_open=True, stdout=True, detach=False, volumes=volume_array, name=container_name)
+        #self.container = self.client.containers.run(image_name, 
+        #    'bash -c "sudo chown clouseau:clouseau /home/clouseau/Emulator-WorldModelers/output && Rscript wm_agmip_emulator.R Maize -33.75 35.75 -0.25 59.25 0.0 0.0"'
+        #    , stdin_open=True, stdout=True, detach=False, volumes=volume_array, name=container_name)
         
         #print(f"\n\nreturned logs for {container_name}\n\n: {self.container}")
 
