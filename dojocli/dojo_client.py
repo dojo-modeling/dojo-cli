@@ -41,15 +41,21 @@ class DojoClient(object):
             jataware/dojo-publish.
 
         """
-        url = f'{self.dojo_url}/models?query=image:"{IMAGE_QUERY_NAME}" AND NOT _exists_:"next_version"&size=1000'
+        #url = f'{self.dojo_url}/models?query=image:"{IMAGE_QUERY_NAME}" AND NOT _exists_:"next_version"&size=1000'
+        url = f'{self.dojo_url}/models/latest?size=1000'
         response = self.generic_dojo_get_request(url)
+
         try:
             resp = response.json()
+            print(resp["hits"])
             models = set()
             for r in resp["results"]:
                 if r['image'] != '' and r['next_version'] == None:
-                    models.add(r['name'])
-
+                    models.add(f"\"{r['name']}\"")
+                #elif r["image"] == '':
+                #    pass#print(f"\"{r['name']}\"", r["image"], r["id"])
+                #else:
+                #    print(f"\"{r['name']}\"", r["image"], r["id"])  
             models = list(models)
             models.sort()
             return models
@@ -110,7 +116,7 @@ class DojoClient(object):
         
         return metadata
 
-    def get_model_info(self, model_name: str):
+    def get_model_info(self, model_name: str, model_id: str = None):
         """
         Description
         -----------
@@ -121,6 +127,9 @@ class DojoClient(object):
         
         model_name: str
             The name of the model.
+        model_id: str
+            The optional model_id of the model passed as version. This overrides
+            the search by model_name.
             
         Returns
         -------
@@ -129,14 +138,26 @@ class DojoClient(object):
         
         """
 
-        url = f'{self.dojo_url}/models?query=name:"{model_name}" AND image:"{IMAGE_QUERY_NAME}" AND NOT _exists_:"next_version"'
+        #url = f'{self.dojo_url}/models?query=name:"{model_name}" AND image:"{IMAGE_QUERY_NAME}" AND NOT _exists_:"next_version"'
+        if model_id == None:
+            url = f'{self.dojo_url}/models/latest?query=name:"{model_name}"'
+        else:
+            url = f'{self.dojo_url}/models/{model_id}'
+        
         response = self.generic_dojo_get_request(url)
+
         try:
             resp = response.json()
 
-            for r in resp["results"]:
-                if r["name"] == model_name:
-                    return r
+            if "results" in resp:
+                # /models/latest returns a list of model objects in "results"
+                for r in resp["results"]:
+                    if (r["name"] == model_name or r["id"] == model_id):
+                        return r
+            elif ("name" in resp and "id" in resp):
+                # models/{model_id} returns a single model object
+                if (resp["name"] == model_name or resp["id"] == model_id):
+                    return resp
 
         except Exception as e:
             if hasattr(e, 'message'):
@@ -159,6 +180,47 @@ class DojoClient(object):
 
         return self.get_dojo_stuff('outputfile', model_id)
         
+    def get_versions(self, model_name: str):
+        """
+        Description
+        -----------
+        Return a versions info for the model.
+        
+        Parameters
+        ---------
+        
+        model_name: str
+            The name of the model.
+            
+        Returns
+        -------
+            
+        JSON Response Body
+            {
+                "current_version": "21fe6a15-f0a5-4ea3-a813-1e33d37f948d",
+                "prev_versions": [],
+                "later_versions": []
+            }
+        
+        """
+
+        # (1) Get the model_id of the latest version.
+        model_dict = self.get_model_info(model_name)
+        model_id = model_dict["id"]
+
+        # (2) Call dojo /models/{model_id}/versions
+        url = f'{self.dojo_url}/models/{model_id}/versions'
+        response = self.generic_dojo_get_request(url)
+        try:
+            return response.json()
+
+        except Exception as e:
+            if hasattr(e, 'message'):
+                print(e.message)
+            else:
+                print(e)
+            exit
+
     def run_model(self, model_name: str, params: str = None, params_filename: str = None, local_output_folder: str = None):
         """
         Description
@@ -276,23 +338,41 @@ class DojoClient(object):
         
         container_name = dc.create_container(image_name, volume_array, container_name)
         
+        dc.execute_command("logger -s running the container now")
+        print('logs:', dc.container.logs())
+
         # Work around for following:
         # the volume_array output folders in the docker container are owned by root, not clouseau.
+        commands = []
         for v in volume_array:
             sa = v.split(":")
             folder = sa[1]
             dc.execute_command(f'sudo chown clouseau:clouseau {folder}')
+            #commands.append(f'sudo chown clouseau:clouseau {folder}')
 
         # Execute the model_command.
-        dc.execute_command(model_command)
+        #dc.execute_command(model_command)
+        #commands.append(model_command)
+
+        dc.execute_command("logger -s testing the logs")
+        print('logs:', dc.container.logs())
+
+        stuff = dc.api_client.logs(dc.container.name, stdout=True, stderr=True, stream=False, timestamps=True)
+        
+        print("stuff:", stuff)
 
         print(f"\nCreated container {container_name}.")
         print(f"\nModel output and run-parameters files are located in {local_output_folder}.")
 
-        
     def set_config(self, config_filename):
         with open(config_filename) as f:
             config = json.load(f)
+
+            if ("DOJO_USER" not in config or 
+                "DOJO_URL" not in config or
+                "DOJO_PWD" not in config):
+                print(f'{config_filename} is missing a required field of DOJO_USER, DOJO_URL, and/or DOJO_PWD.')
+                return
 
             # Set dojo url and authentication credentials.
             self.dojo_auth = (config["DOJO_USER"], config["DOJO_PWD"]) 

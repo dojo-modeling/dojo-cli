@@ -96,9 +96,26 @@ class DockerClient(object):
             volume_array: list/array
                 Array of dictionary pairs of local_volume:container volume for volume mounts.
 
-            container_name:
+            container_name: str
                 An informative name for the container instead of gibberish like "stinky_goiter".
         
         """
-        self.container = self.client.containers.run(image_name, command='bash', stdin_open=True, detach=True, volumes=volume_array, name=container_name)
+        # detach defautls to False
+        #self.container = self.client.containers.run(image_name, command='bash', stdin_open=True, stdout=True, detach=True, volumes=volume_array, name=container_name)
+        #self.container = self.client.containers.run(image_name, 'logger gah gah')
+        #print(self.container)
+        # command=["/bin/sh", "-c", "echo gah && logger gah"]
+
+
+        #self.container = self.client.containers.run(image_name, "/bin/sh", stdin_open=True, stdout=True, detach=True, volumes=volume_array, name=container_name)
+        
+        self.container = self.client.containers.run(image_name, 
+            'bash -c "sudo chown clouseau:clouseau /home/clouseau/Emulator-WorldModelers/output && Rscript wm_agmip_emulator.R Maize -33.75 35.75 -0.25 59.25 0.0 0.0"'
+            , stdin_open=True, stdout=True, detach=False, volumes=volume_array, name=container_name)
+        
+        print(f"\n\nreturned logs for {container_name}\n\n: {self.container}")
+
+
+        print(f"\n\nget lgos: \n\n {self.api_client.logs(container_name)}")
+
         return self.container.name

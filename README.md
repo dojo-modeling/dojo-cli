@@ -43,23 +43,23 @@ docker>=5.0.3
 
 ## CLI help
 
-The following commands will provide details of each available dojocli command:
+The following commands will provide details of each available dojo command:
 
 ```
-dojocli --help
-dojocli describe --help
-dojocli listmodels --help
-dojocli printoutputs --help
-dojocli printparams --help
-dojocli runmodel --help
+dojo --help
+dojo describe --help
+dojo listmodels --help
+dojo outputs --help
+dojo parameters --help
+dojo runmodel --help
 ```
 
 ## Available commands
 
 -  [describe](#describe): Print a description of the model.
 -  [listmodels](#listmodels): List available models.
--  [printoutputs](#printoutputs): Print descriptions of the output files produced by a model.
--  [printparams](#printparams): Print the parameters required to run a model.
+-  [outputs](#outputs): Print descriptions of the output files produced by a model.
+-  [parameters](#parameters): Print the parameters required to run a model.
 -  [runmodel](#runmodel): Run a model.
 
 
@@ -73,7 +73,7 @@ Print a description of the model.
 
 ### Example
 
-`python dojocli/cli.py describe --model="Population Model"`
+`python dojo/cli.py describe --model="Population Model"`
 ```
 NAME
 ----
@@ -100,7 +100,7 @@ List available models.
 
 ### Example
 
-$ `python dojocli/cli.py listmodels`
+$ `python dojo/cli.py listmodels`
 ```
 (1) APSIM
 (2) APSIM-Cropping
@@ -114,7 +114,7 @@ $ `python dojocli/cli.py listmodels`
 ...
 ```
 
-## *printoutputs*
+## *outputs*
 
 ### Description
 
@@ -126,7 +126,7 @@ Prints a summary of the output files produced by a model.
 
 ### Example
 
-`dojocli printouputs --model=Topoflow`
+`dojo ouputs --model=Topoflow`
 
 ```
 Getting output file information for Topoflow ...
@@ -158,7 +158,7 @@ Topoflow writes 4 output file(s):
     u: Mean Channel Flow Velocity
 ```
 
-## *printparams*
+## *parameters*
 
 ### Description
 
@@ -170,7 +170,7 @@ Prints a description of model parameters and writes an example to file.
 
 ### Example
 
-`dojocli printparams --model=CHIRPS-Monthly`
+`dojo parameters --model=CHIRPS-Monthly`
 
 ```
 Getting parameters for CHIRPS-Monthly ...
@@ -205,7 +205,7 @@ bounding_box: '[[33.512234, 2.719907], [49.98171,16.501768]]'
 Template CHIRPS-Monthly parameters file written to params_template.json.
 ```
 
-Additionally, `printparams` will write *params_template.json* with example model parameters:
+Additionally, `parameters` will write *params_template.json* with example model parameters:
 ```
 {
     "month": 1,
@@ -252,11 +252,11 @@ In addition to the model's output and accessory files, `runmodel` will write two
 
 (1) Run the CHIRPS-Monthly model using the default configuration settings in *.config* and model parameters in *params_template.json*:
 
-- ```dojocli runmodel --model=CHIRPS-Monthly```
+- ```dojo runmodel --model=CHIRPS-Monthly```
 
 (2) Run the CHIRPS-Monthly model using the default configuration settings in *.config* and model parameters in *chirps-monthly.json*:
-- ```dojocli runmodel --model=CHIRPS-Monthly --paramsfile=chirps-monthly.json```
+- ```dojo runmodel --model=CHIRPS-Monthly --paramsfile=chirps-monthly.json```
 
 (3) Run the CHIRPS-Monthly model using the default configuration settings in *.config* and specified model parameters:
-- ```dojocli runmodel --model=CHIRPS-Monthly --params='{"month": "09", "year": "2016", "bounding_box": "[[33.512234, 2.719907], [49.98171,16.501768]]"}'```
+- ```dojo runmodel --model=CHIRPS-Monthly --params='{"month": "09", "year": "2016", "bounding_box": "[[33.512234, 2.719907], [49.98171,16.501768]]"}'```
 

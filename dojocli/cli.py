@@ -8,8 +8,6 @@ import click
 from datetime import datetime
 from dojocli.dojo_client import DojoClient
 import json
-import re
-import shlex
 
 
 def print_description(model_dict: dict):
@@ -21,6 +19,8 @@ def print_description(model_dict: dict):
     """
 
     print(f'NAME\n----\n{model_dict["name"]}\n')
+    print(f'VERSION\n----\n{model_dict["id"]}\n')
+
     print(f'MODEL FAMILY\n------------\n{model_dict["family_name"]}\n')
     print(f'DESCRIPTION\n-----------\n{model_dict["description"]}\n')
     
@@ -47,7 +47,7 @@ def print_description(model_dict: dict):
 
     print()
 
-def print_outputfiles(model: str, outputfile_dict: dict):
+def print_outputfiles(model: str, version: str, outputfile_dict: dict):
     """
     Description
     -----------
@@ -55,7 +55,7 @@ def print_outputfiles(model: str, outputfile_dict: dict):
     
     """
 
-    print(f'\n{model} writes {len(outputfile_dict)} output file(s):\n')
+    print(f'\n"{model}" version {version} writes {len(outputfile_dict)} output file(s):\n')
 
     for idx, outputfile in enumerate(outputfile_dict):
         transform = outputfile["transform"]
@@ -67,19 +67,18 @@ def print_outputfiles(model: str, outputfile_dict: dict):
         print()
     print()
 
-def print_params(model: str,  model_dict: dict, metadata: str, params_filename: str = 'params_template.json'):
+def print_params(model: str,  model_dict: dict, params_filename: str = 'params_template.json'):
     """
     Description
     -----------
-    (1) Print model parameters and instructions derived from the directive 
-    portion of the metadata.
+    (1) Print model parameters and instructions derived from the model metadata.
 
     (2) Write the json structure to params.json or specified filename.
 
     Parameters
     ----------
-    metadata: dict
-        Model metadata returned by dojo_client.get_metadata()
+    model_dict: dict
+        Model metadata returned by dojo_client.get_model_info()
     model: str
         The name of the model.
     params_filename:
@@ -87,89 +86,133 @@ def print_params(model: str,  model_dict: dict, metadata: str, params_filename: 
 
     """
 
-    print(f'\nModel run parameters for {model}:\n')
-    param_type_dict = dict()
-
+    output_params = {}
     # (1) Parse the parameters name, description etc. from metadata retrived via dojo_api/models
     if "parameters" in model_dict:
         for idx, p in enumerate(model_dict["parameters"]):
-            param_type_dict[p["name"]] = p['type']
+            param_name = p["name"]
+            param_default = p["default"]
+            param_type = p['type']
+
+            # Add param names and defaults to output dictionary, correcting for
+            # type (not data_type).
+            # Massive leap of faith here that the param type is correct.
+            if (param_type == 'float' or param_type == 'numerical'):
+                try:
+                    output_params[param_name] = float(param_default)
+                except Exception:
+                    output_params[param_name] = param_default 
+            elif (param_type == 'int' or param_type == 'integer'):
+                try:
+                    output_params[param_name] = int(param_default)
+                except Exception:
+                    output_params[param_name] = param_default
+            else:
+                output_params[param_name] = param_default
+
             print(f"Parameter {idx+1}     : {p['display_name']}")
             print("Description     : " + str(p['description']).replace('\n',' '))
             print(f"Type            : {p['type']}")
             print(f"Unit            : {p['unit']}")
             print(f"Unit Description: {p['unit_description']}")
+            print(f"Default Value   : {p['default']}")
             print()
 
-    # (2) Parse command parameters from the 'command_raw' directive.
-    if 'directive' in metadata:
-        output_params = {}
-        directive = metadata['directive']
-        if (not directive == None 
-            and "command_raw" in directive 
-            and directive["command_raw"] != ""
-            and "command" in directive):
-
-            command_raw = directive["command_raw"]
-            command = directive["command"]
-            print('\nExample parameters:\n')
-    
-            for param_name in param_type_dict:
-                if not command.__contains__(param_name):
-                    continue
-                # Find the token before the param_name.
-                # For example, the parameter bounding_box in the CHIRPS models.
-                # command:     python3 run_chirps_tiff.py --name=CHIRPS --month={{ month }} --year={{ year }} --bbox='{{ bounding_box }}'
-                splitter = "{{ " + param_name + " }}"
-                sa = command.split(splitter) 
-                # sa[0] = "python3 run_chirps_tiff.py --name=CHIRPS --month={{ month }} --year={{ year }} --bbox='{{ "
-                # Strip trailing whitespace from sa[0] and any single quotes.
-                param_marker =  re.sub("[']", "", sa[0].strip())
-                # Now param_marker = bounding_box python3 run_chirps_tiff.py --name=CHIRPS --month={{ month }} --year={{ year }} --bbox=
-                # Next split on a space, and take the last symbol in the array.
-                sa = param_marker.split(" ")
-                param_marker = sa[-1] 
-                # In this example, param_marker is now --bbox=; we can use that to parse command_raw to get an example parameter.
-                # command_raw: python3 run_chirps_tiff.py --name=CHIRPS --month=01 --year=2021 --bbox='[[33.512234, 2.719907], [49.98171,16.501768]]'               
-                sa = command_raw.split(param_marker)
-                param_value = sa[1] 
-                # param_example = '[[33.512234, 2.719907], [49.98171,16.501768]]'
-                # In other instances, there may be trailing params in param_example,
-                # e.g. for CHIRPS model param month where the param_example would
-                # be: 
-                # 01 --year=2021 --bbox='[[33.512234, 2.719907], [49.98171,16.501768]]'
-                # in this example.
-                # Use the shlex library to split on spaces but not inside quotes.
-                # Strip the quotes via posix=True (default setting for shlex)
-                param_value = shlex.split(param_value, posix=True)[0].strip()           
-
-                # Add the param_value to the output_params as the correct type.
-                # Massive leap of faith here that the param type is correct.
-                param_type = param_type_dict[param_name]
-                if param_type == 'float':
-                    try:
-                        output_params[param_name] = float(param_value)
-                    except Exception:
-                        output_params[param_name] = param_value
-                elif param_type == 'int':
-                    try:
-                        output_params[param_name] = int(param_value)
-                    except Exception:
-                        output_params[param_name] = param_value
-                else:             
-                    output_params[param_name] = param_value
-
-                print(f'{param_name}: {param_value}')        
-        else:
-            for param_name in param_type_dict:
-                output_params[param_name] = ""
+        # Reprint default parameter as examples.
+        print('Example parameters:')
+        for k, v in output_params.items():
+            print(f'{k}: {v}')
 
         # Write the output_params as a template to file.
-
         with open(params_filename, 'w') as f:
             json.dump(output_params, f, indent=4)
 
-        click.echo(f"\nTemplate {model} parameters file written to {params_filename}.")
+        click.echo(f"\nExample {model} template parameters file written to {params_filename}.")
+
+    else:
+        print(f'\nNo model run parameters found for {model}:\n')
+    """        
+        # or parse command parameters from the 'command_raw' directive.
+        elif 'directive' in metadata:
+            directive = metadata['directive']
+            if (not directive == None 
+                and "command_raw" in directive 
+                and directive["command_raw"] != ""
+                and "command" in directive):
+
+                command_raw = directive["command_raw"]
+                command = directive["command"]
+                print('\nExample parameters:\n')
+        
+                for param_name in param_type_dict:
+                    if not command.__contains__(param_name):
+                        continue
+                    # Find the token before the param_name.
+                    # For example, the parameter bounding_box in the CHIRPS models.
+                    # command:     python3 run_chirps_tiff.py --name=CHIRPS --month={{ month }} --year={{ year }} --bbox='{{ bounding_box }}'
+                    splitter = "{{ " + param_name + " }}"
+                    sa = command.split(splitter) 
+                    # sa[0] = "python3 run_chirps_tiff.py --name=CHIRPS --month={{ month }} --year={{ year }} --bbox='{{ "
+                    # Strip trailing whitespace from sa[0] and any single quotes.
+                    param_marker =  re.sub("[']", "", sa[0].strip())
+                    # Now param_marker = bounding_box python3 run_chirps_tiff.py --name=CHIRPS --month={{ month }} --year={{ year }} --bbox=
+                    # Next split on a space, and take the last symbol in the array.
+                    sa = param_marker.split(" ")
+                    param_marker = sa[-1] 
+                    # In this example, param_marker is now --bbox=; we can use that to parse command_raw to get an example parameter.
+                    # command_raw: python3 run_chirps_tiff.py --name=CHIRPS --month=01 --year=2021 --bbox='[[33.512234, 2.719907], [49.98171,16.501768]]'               
+                    sa = command_raw.split(param_marker)
+                    param_value = sa[1] 
+                    # param_example = '[[33.512234, 2.719907], [49.98171,16.501768]]'
+                    # In other instances, there may be trailing params in param_example,
+                    # e.g. for CHIRPS model param month where the param_example would
+                    # be: 
+                    # 01 --year=2021 --bbox='[[33.512234, 2.719907], [49.98171,16.501768]]'
+                    # in this example.
+                    # Use the shlex library to split on spaces but not inside quotes.
+                    # Strip the quotes via posix=True (default setting for shlex)
+                    param_value = shlex.split(param_value, posix=True)[0].strip()                       
+                    output_params[param_name] = param_value
+
+                    print(f'{param_name}: {param_value}')        
+            else:
+                for param_name in param_type_dict:
+                    output_params[param_name] = ""
+    """
+        
+def print_versions(model: str, versions: dict):
+    """
+    Description
+    -----------
+    Print the list of versions for a model.
+
+    Parameters
+    ----------
+    model: str
+        The name of the model.
+    versions: dict
+        JSON returned by dojo_client.get_verions() in the format 
+        {
+        "current_version": "21fe6a15-f0a5-4ea3-a813-1e33d37f948d",
+        "prev_versions": [],
+        "later_versions": []
+        }
+    """
+
+    print(f'\nAvailable versions of "{model}":\n')
+    
+    print('Current Version')
+    print(f'"{versions["current_version"]}"')
+
+    print('\nPrevious Versions')
+    for pv in versions["prev_versions"]:
+        print(f'"{pv}"')
+
+    print('\nLater Versions')
+    for lv in versions["later_versions"]:
+        print(f'"{lv}"')
+
+    print()
 
 
 @click.group()
@@ -180,12 +223,21 @@ def cli():
 @cli.command()
 @click.option("--model", type=str, help="the model name e.g. CHIRPS-Monthly")
 @click.option("--config", type=str, default=".config", help="configuration json filename (defaults to .config)")
-def describe(model, config):
+@click.option("--version", type=str, default=None, help="optional version id e.g. ceedd3b0-f48f-43d2-b279-d74be695ed1c")
+def describe(model, version, config):
     """Print a description of the model."""
 
-    click.echo(f"\nGetting the description for {model} ...\n")
+    if (model is None and version is None):
+        click.echo('\neither --model or --version is required.\n')
+        return
+
+    if version is None:
+        click.echo(f'\nGetting the description for "{model}" ...')
+    else:
+        click.echo(f'\nGetting the description for model version "{version}" ...')
+
     dc = DojoClient(config)
-    model_dict = dc.get_model_info(model)
+    model_dict = dc.get_model_info(model, version)
 
     if (model_dict == None):
         click.echo(f"\n No meta data is available for this model.\n")
@@ -210,38 +262,75 @@ def listmodels(config):
 @cli.command()
 @click.option("--model", type=str, help="the model name e.g. CHIRPS-Monthly")
 @click.option("--config", type=str, default=".config", help="configuration json filename (defaults to .config)")
-def printoutputs(model, config):
+@click.option("--version", type=str, default=None, help="optional version id e.g. ceedd3b0-f48f-43d2-b279-d74be695ed1c")
+def outputs(model, config, version):
     """Print descriptions of the output files produced by a model."""
-    click.echo(f"\nGetting output file information for {model} ...")
-    
+
+    if (model is None and version is None):
+        click.echo('\neither --model or --version is required.\n')
+        return
+
+    if version is None:
+        click.echo(f'\nGetting output file information for "{model}" ...')
+    else:
+        click.echo(f'\nGetting output file information for model version "{version}" ...')
+
     dc = DojoClient(config)
-    model_dict = dc.get_model_info(model)
+    model_dict = dc.get_model_info(model, version)
     model_id = model_dict["id"]
     outputfile_dict = dc.get_outputfiles(model_id)
     # Call a seperate print_params function to keep things clean.
-    print_outputfiles(model, outputfile_dict)
+    print_outputfiles(model, model_id, outputfile_dict)
 
 
 @cli.command()
 @click.option("--model", type=str, help="the model name e.g. CHIRPS-Monthly")
 @click.option("--config", type=str, default=".config", help="configuration json filename (defaults to .config)")
-def printparams(model, config):
+@click.option("--version", type=str, default=None, help="optional version id e.g. ceedd3b0-f48f-43d2-b279-d74be695ed1c")
+def parameters(model, config, version):
     """Print the parameters required to run a model."""
-    click.echo(f"\nGetting parameters for {model} ...")
     
-    dc = DojoClient(config)
-    model_dict = dc.get_model_info(model)
-
-    if (model_dict == None):
-        click.echo(f"\n No meta data is available for this model.\n")
+    if (model is None and version is None):
+        click.echo('\neither --model or --version is required.\n')
         return
 
-    model_id = model_dict["id"]
-    metadata = dc.get_metadata(model_id)
+    if version is None:
+        click.echo(f'\nGetting parameters for "{model}" ...')
+    else:
+        click.echo(f'\nGetting parameters for model version "{version}" ...')
+
+    dc = DojoClient(config)
+    model_dict = dc.get_model_info(model, version)
+
+    if (model_dict == None):
+        click.echo(f'\nNo model data is available for this model.\n')
+        return
 
     # Call a seperate print_params function to keep things clean.
-    print_params(model, model_dict, metadata)
+    print_params(model, model_dict)
 
+
+@cli.command()
+@click.option("--model", type=str, help="the model name e.g. CHIRPS-Monthly")
+@click.option("--config", type=str, default=".config", help="configuration json filename (defaults to .config)")
+def versions(model, config):
+    """Print all registered versions of a model."""
+    
+    if model==None:
+        click.echo("\n--model is a required option.\n")
+        return
+
+    click.echo(f"\nGetting versions of \"{model}\" ...")
+
+    dc = DojoClient(config)
+    versions = dc.get_versions(model)
+
+    if (versions == None):
+        click.echo(f"\n No versions are available for this model.\n")
+        return
+
+    # Call a seperate print_versions function to keep things clean.
+    print_versions(model, versions)
 
 @cli.command()
 @click.option("--model", type=str, default=None, help="the model name e.g. CHIRPS-Monthly")
@@ -253,7 +342,7 @@ def runmodel(model, config, paramsfile, params, outputdir: str = None):
     """Run a model."""
 
     if model==None:
-        click.echo("\nrunmodel --model is a required option.\n")
+        click.echo("\n--model is a required option.\n")
         return
     elif params==None:
         # If --params json is not passed, then --paramsfile, or the default --paramsfile, must exist.
@@ -262,7 +351,7 @@ def runmodel(model, config, paramsfile, params, outputdir: str = None):
             click.echo("\n--paramfile not found and --params is blank.\nOne of either --paramfile or --params is required.\n")
             return
 
-    click.echo(f"\nRunning {model} ...\n")
+    click.echo(f"\nRunning \"{model}\" ...\n")
 
     dc = DojoClient(config)
     dc.run_model(model, params, paramsfile, local_output_folder = outputdir)
@@ -270,3 +359,4 @@ def runmodel(model, config, paramsfile, params, outputdir: str = None):
 
 if __name__ == "__main__":     
     cli()
+    #runmodel(model="CHIRPS-Monthly", params=None, config=".config", paramsfile="params_template.json", outputdir=None)

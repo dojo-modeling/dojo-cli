@@ -34,7 +34,7 @@ setup(
     description="A command-line interface for black box model execution.",
     entry_points={
         "console_scripts": [
-            "dojocli=dojocli.cli:cli",
+            "dojo=dojocli.cli:cli",
         ],
     },
     #setup_requires=["numpy>=1.20.1"],  # This is not working as expected
