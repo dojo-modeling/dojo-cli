@@ -6,6 +6,7 @@ docker-py (https://pypi.org/project/docker-py/) client for dojo-api
 """
 
 import docker
+import click
 from tqdm import tqdm
 
 class DockerClient(object):
@@ -16,7 +17,7 @@ class DockerClient(object):
         self.container = None
 
     def execute_command(self, model_command):
-        print(f'\nExecuting {model_command} in {self.container.name}.')
+        click.echo(f'\nExecuting {model_command} in {self.container.name}.')
         exe = self.api_client.exec_create(container=self.container.name, cmd=model_command)
         self.api_client.exec_start(exe)
 
@@ -116,19 +117,19 @@ class DockerClient(object):
                 Option to run detached (in background.)
         
         """
-       
         if run_attached:
             log_header = False
-            # Needs stderr=True to stream correctly.
+            # Needs stderr=True to stream correctly. It looks like the run command
+            # must complete before the logs are streamed.
             logs=[]
             for b in self.client.containers.run(image_name, command=container_command, volumes=volume_array, name=container_name, 
                 stderr=True, stdout=True, stream = True, auto_remove=True):
                 if not log_header:
-                    print('\nModel run logs:\n')
+                    click.echo('\nModel run logs:\n')
                     log_header = True
                 line = b.decode("utf-8")
                 logs.append(line)
-                print(line.strip())
+                click.echo(line.strip())
             return logs
         else:
             # If running detached, client.containers.run returns the container object.
@@ -140,9 +141,7 @@ class DockerClient(object):
         """
         Description
         -----------
-        Remove the Docker container from the system. This is done for attached
-        containers, but not automatically since we are still getting the logs
-        after running (because they won't stream).
+        Remove the Docker container from the system.
         """
 
         self.api_client.remove_container(container_name)

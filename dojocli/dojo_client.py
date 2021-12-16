@@ -2,6 +2,7 @@
   Dojo-cli client for dojo api.
 """
 
+import click
 from datetime import datetime
 from dojocli.docker_client import DockerClient
 from jinja2 import Template
@@ -21,9 +22,9 @@ class DojoClient(object):
             return response
         except Exception as e:
             if hasattr(e, 'message'):
-                print(e.message)
+                click.echo(e.message)
             else:
-                print(e)
+                click.echo(e)
             exit
 
     def get_available_models(self):
@@ -43,23 +44,22 @@ class DojoClient(object):
 
         try:
             resp = response.json()
-            print(resp["hits"])
             models = set()
-            for r in resp["results"]:
-                if r['image'] != '' and r['next_version'] == None:
-                    models.add(f"\"{r['name']}\"")
-                #elif r["image"] == '':
-                #    pass#print(f"\"{r['name']}\"", r["image"], r["id"])
-                #else:
-                #    print(f"\"{r['name']}\"", r["image"], r["id"])  
+
+            #for r in resp["results"]:
+            #    if r['image'] != '' and r['next_version'] == None:
+            #        models.add(f"\"{r['name']}\"")
+            
+            # List the latest versions of models even if it does not have an image.
+            models = { f"\"{r['name']}\"" for r in  resp["results"]}
             models = list(models)
             models.sort()
             return models
         except Exception as e:
             if hasattr(e, 'message'):
-                print(e.message + '\n' + response.text)
+                click.echo(f'{e.message}\n{response.text}')
             else:
-                print(response.text)
+                click.echo(response.text)
             exit
 
     def get_dojo_stuff(self, stuff, model_id):
@@ -73,9 +73,9 @@ class DojoClient(object):
             return response.json()
         except Exception as e:
             if hasattr(e, 'message'):
-                print(e.message)
+                click.echo(e.message)
             else:
-                print(e)
+                click.echo(e)
             exit
 
     def get_metadata(self, model_id: str):
@@ -157,11 +157,47 @@ class DojoClient(object):
 
         except Exception as e:
             if hasattr(e, 'message'):
-                print(e.message)
+                click.echo(e.message)
             else:
-                print(e)
+                click.echo(e)
             exit
         
+    def get_model_versions_with_images(self, model_name: str):
+        """
+        Description
+        -----------
+        Called from cli.py when the user attempts to run a model lacking an image.
+        This will return a list of versions and creation dates with associated images.
+
+        Parameters
+        ----------
+        model_name: str
+            The name of the model.
+
+        Returns
+        -------
+        Sorted (reverse=true) list of (created_at, version) tuples.
+        """
+
+        url = f'{self.dojo_url}/models?query=name:"{model_name}"&size=100'
+        response = self.generic_dojo_get_request(url)
+        resp = response.json()
+        versions = []
+        try:
+            for r in resp["results"]:
+                if len(r['image'].strip()) > 0:
+                    created_at = datetime.fromtimestamp(r["created_at"]/1000).strftime('%Y-%m-%d %H:%M:%S')
+                    versions.append((created_at, r['id']))
+
+            versions.sort(reverse=True)
+            return versions
+        except Exception as e:
+            if hasattr(e, 'message'):
+                click.echo(e.message)
+            else:
+                click.echo(e)
+            exit
+
     def get_outputfiles(self, model_id: str):
         """
         Description
@@ -212,9 +248,9 @@ class DojoClient(object):
 
         except Exception as e:
             if hasattr(e, 'message'):
-                print(e.message)
+                click.echo(e.message)
             else:
-                print(e)
+                click.echo(e)
             exit
 
     def run_model(self, model_name: str, params: str = None, params_filename: str = None, version: str = None, 
@@ -247,20 +283,19 @@ class DojoClient(object):
                 Option to run the model detached (in background.)
 
         """
-
-        # Use default folder if not specified.
-        datetimestamp = datetime.today().strftime("%Y%m%d%H%M%S")
-        if local_output_folder == None:
-
-            local_output_folder = f'{os.getcwd()}/runs/{model_name if model_name is not None else version}/{datetimestamp}'
         
-        # Create directory structure.
-        os.makedirs(local_output_folder)
-
         # Get the model_id and image from the model_name or version.
         model_dict = self.get_model_info(model_name, model_id=version)
         model_id = model_dict["id"]
         image_name = model_dict["image"]
+
+        # Use default directory if not specified.
+        datetimestamp = datetime.today().strftime("%Y%m%d%H%M%S")
+        if local_output_folder == None:
+            local_output_folder = f'{os.getcwd()}/runs/{model_name}/{model_id}/{datetimestamp}'
+
+        # Create directory structure.
+        os.makedirs(local_output_folder)
 
         # Get the metadata for this model. 
         metadata = self.get_metadata(model_id)
@@ -308,7 +343,7 @@ class DojoClient(object):
                 accessory_dir_volume = local_output_folder + f"/accessories:{accessory_dir}"
                 volume_array.append(accessory_dir_volume)
 
-        # Set run command from metadata["directive"]["command"] and substitute params.
+        # Load parameters.
         if params == None:
             # If params json not passed then read from file.
             with open(params_filename, "r") as fh:
@@ -325,16 +360,15 @@ class DojoClient(object):
         if len(accessory_captions) > 0:
             with open(f'{local_output_folder}/accessories-captions.json', 'w') as fh:
                 json.dump(accessory_captions, fh, indent=4)
-
-        
+     
         # Instantiate the Docker Client.
         dc = DockerClient()
         
         # Pull the image
-        print(f'Getting model image ...\n')
+        click.echo(f'Getting model image ...\n')
         dc.pull_image(image_name)
 
-        # Begin constructing the command to pass when running the container.
+        # Begin constructing the command to pass to the container.
         container_command = 'bash -c "'
 
         # Work around for following:
@@ -343,23 +377,32 @@ class DojoClient(object):
         for v in volume_array:
             sa = v.split(":")
             folder = sa[1]
-            container_command = container_command + f'sudo chown clouseau:clouseau {folder} && '
+            container_command = container_command + f'sudo chown clouseau:clouseau {folder} ; '
 
-        # Add the model_command with a trailing quote (") to the container command.
+        # Set run command from metadata["directive"]["command"] and substitute params.
         model_command = Template(metadata["directive"]["command"])
         model_command = model_command.render(params)
+
+        # In the model_command change any double quotes to escaped single quotes e.g.
+        # /bin/bash -c "export PYTHONPATH=/home/clouseau/flee: ; bash run_flee.sh"
+        # to
+        # /bin/bash -c \'export PYTHONPATH=/home/clouseau/flee: ; bash run_flee.sh\'
+        model_command = model_command.replace('"', "\'")
+        
+        # Add the model_command with a trailing quote (") to the container command.
         container_command = container_command + f'{model_command}"'
         
         # Create the container name.
         if model_name is None:
-            container_name = version[-12:] + datetimestamp
+            container_name = f'dojo-{version[-12:]}{datetimestamp}'
         else:
-            container_name = re.sub("[ \]\[,()_]", '', model_name.lower() ).strip() + datetimestamp
+            container_name = re.sub("[ \]\[,()_]", '', model_name.lower() ).strip()
+            container_name = f'dojo-{container_name}{datetimestamp}'
 
         # TODO: better explanations here.
+        click.echo(f"\n\nRunning {model_name} version {model_id} in Docker container {container_name} ... \n")
         if run_attached:
-            print(f"\nRunning model in Docker container {container_name} ... \n")
-            print(f"the model is running attached ... ")
+            click.echo(f"The model is running attached; this process will wait until the run is completed.")
 
             # Run the container.
             logs = dc.create_container(image_name, volume_array, container_name, container_command)
@@ -368,23 +411,25 @@ class DojoClient(object):
             with open(f'{local_output_folder}/logs.txt', 'w') as fh:
                 fh.writelines(logs)
 
+            click.echo(f"\n\nRun completed.\nModel output, run-parameters, and log files are located in {local_output_folder}.")
+
         else:
-            print(f"the model is running deattached ... ")
+            click.echo(f"The model is running detached in background.")
+            click.echo(f"Model progress can be monitored by the following command: \"docker logs {container_name} -f\"")
         
             # Run the container.
-            dc.create_container(image_name, volume_array, container_name, container_command, runattached=False)
+            dc.create_container(image_name, volume_array, container_name, container_command, run_attached=False)
             
             # Write the logs, but these will probably be incomplete for the detached container.
+            # TODO: fix the log_config so it will stream.
             logs = dc.get_logs(container_name)
             with open(f'{local_output_folder}/logs.txt', 'wb') as fh:
                 fh.write(logs)
 
-        # Remove the container if running attached. Autoremove = False because 
-        # the logs aren't streaming.
-        #if run_attached:
-        #    dc.remove_container(container_name)
-
-        print(f"\nModel output, run-parameters, and log files are located in {local_output_folder}.")
+            # Messaging for handling the detached container.
+            click.echo(f"When the run is completed, model output, run-parameters, and log files will be located in {local_output_folder}.")
+            click.echo(f"To see the final run log run the following commnad: \"docker logs {container_name}.\"")
+            click.echo(f'When the conatainer is finished running, the container can be removed with the following command: "docker container rm {container_name}".')
 
     def set_config(self, config_filename):
         with open(config_filename) as f:
@@ -393,7 +438,7 @@ class DojoClient(object):
             if ("DOJO_USER" not in config or 
                 "DOJO_URL" not in config or
                 "DOJO_PWD" not in config):
-                print(f'{config_filename} is missing a required field of DOJO_USER, DOJO_URL, and/or DOJO_PWD.')
+                click.echo(f'{config_filename} is missing a required field of DOJO_USER, DOJO_URL, and/or DOJO_PWD.')
                 return
 
             # Set dojo url and authentication credentials.

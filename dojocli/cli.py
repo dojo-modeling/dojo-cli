@@ -18,34 +18,34 @@ def print_description(model_dict: dict):
 
     """
 
-    print(f'NAME\n----\n{model_dict["name"]}\n')
-    print(f'VERSION\n----\n{model_dict["id"]}\n')
+    click.echo(f'NAME\n----\n{model_dict["name"]}\n')
+    click.echo(f'VERSION\n----\n{model_dict["id"]}\n')
 
-    print(f'MODEL FAMILY\n------------\n{model_dict["family_name"]}\n')
-    print(f'DESCRIPTION\n-----------\n{model_dict["description"]}\n')
+    click.echo(f'MODEL FAMILY\n------------\n{model_dict["family_name"]}\n')
+    click.echo(f'DESCRIPTION\n-----------\n{model_dict["description"]}\n')
     
     # Convert epoch time in milliseconds to seconds.
     created_at = datetime.fromtimestamp(model_dict["created_at"]/1000).strftime('%Y-%m-%d %H:%M:%S')
-    print(f'CREATED DATE\n------------\n{created_at}\n')
+    click.echo(f'CREATED DATE\n------------\n{created_at}\n')
     
-    print('CATEGORY\n--------')
+    click.echo('CATEGORY\n--------')
     category = ''
     for i in model_dict["category"]:
         category = category + f'{i.upper()}\t'
-    print(category + '\n')
+    click.echo(category + '\n')
 
-    print('MAINTAINER\n------------')
+    click.echo('MAINTAINER\n------------')
     for k, v in model_dict["maintainer"].items():
-        print(f'{k.upper()}: {v}')
-    print()
+        click.echo(f'{k.upper()}: {v}')
+    click.echo()
 
-    print(f'DOCKER IMAGE\n------------\n{model_dict["image"]}\n')
+    click.echo(f'DOCKER IMAGE\n------------\n{model_dict["image"]}\n')
 
-    print('PARAMETERS\n----------')
+    click.echo('PARAMETERS\n----------')
     for param_dict in model_dict["parameters"]:
-        print(param_dict["display_name"])
+        click.echo(param_dict["display_name"])
 
-    print()
+    click.echo()
 
 def print_outputfiles(model: str, version: str, outputfile_dict: dict):
     """
@@ -55,19 +55,19 @@ def print_outputfiles(model: str, version: str, outputfile_dict: dict):
     
     """
 
-    print(f'\n"{model}" version {version} writes {len(outputfile_dict)} output file(s):\n')
+    click.echo(f'\n"{model}" version {version} writes {len(outputfile_dict)} output file(s):\n')
 
     for idx, outputfile in enumerate(outputfile_dict):
         transform = outputfile["transform"]
-        print(f'({idx+1}) {outputfile["path"]}: {outputfile["name"]} in {transform["meta"]["ftype"]} format with the following labeled data:')
-        #print(f'({idx+1}) {outputfile["name"]} in {transform["meta"]["ftype"]} file {outputfile["path"]} with the following labeled data:')
+        click.echo(f'({idx+1}) {outputfile["path"]}: {outputfile["name"]} in {transform["meta"]["ftype"]} format with the following labeled data:')
+        #click.echo(f'({idx+1}) {outputfile["name"]} in {transform["meta"]["ftype"]} file {outputfile["path"]} with the following labeled data:')
         for transform_type in ['geo', 'date', 'feature']:
             for data_type in transform[transform_type]:
-                print(f'    {data_type["name"]}: {data_type["display_name"]}')
-        print()
-    print()
+                click.echo(f'    {data_type["name"]}: {data_type["display_name"]}')
+        click.echo()
+    click.echo()
 
-def print_params(model: str,  model_dict: dict, params_filename: str = 'params_template.json'):
+def print_params(model_dict: dict, params_filename: str = 'params_template.json'):
     """
     Description
     -----------
@@ -79,8 +79,6 @@ def print_params(model: str,  model_dict: dict, params_filename: str = 'params_t
     ----------
     model_dict: dict
         Model metadata returned by dojo_client.get_model_info()
-    model: str
-        The name of the model.
     params_filename:
             Filename for params template file. Defaults to "params.json".
 
@@ -110,27 +108,27 @@ def print_params(model: str,  model_dict: dict, params_filename: str = 'params_t
             else:
                 output_params[param_name] = param_default
 
-            print(f"Parameter {idx+1}     : {p['display_name']}")
-            print("Description     : " + str(p['description']).replace('\n',' '))
-            print(f"Type            : {p['type']}")
-            print(f"Unit            : {p['unit']}")
-            print(f"Unit Description: {p['unit_description']}")
-            print(f"Default Value   : {p['default']}")
-            print()
+            click.echo(f"Parameter {idx+1}     : {p['display_name']}")
+            click.echo("Description     : " + str(p['description']).replace('\n',' '))
+            click.echo(f"Type            : {p['type']}")
+            click.echo(f"Unit            : {p['unit']}")
+            click.echo(f"Unit Description: {p['unit_description']}")
+            click.echo(f"Default Value   : {p['default']}")
+            click.echo()
 
         # Reprint default parameter as examples.
-        print('Example parameters:')
+        click.echo('Example parameters:')
         for k, v in output_params.items():
-            print(f'{k}: {v}')
+            click.echo(f'{k}: {v}')
 
         # Write the output_params as a template to file.
         with open(params_filename, 'w') as f:
             json.dump(output_params, f, indent=4)
 
-        click.echo(f"\nExample {model} template parameters file written to {params_filename}.")
+        click.echo(f"\nExample {model_dict['name']} version {model_dict['id']} template parameters file written to {params_filename}.")
 
     else:
-        print(f'\nNo model run parameters found for {model}:\n')
+        click.echo(f'\nNo model run parameters found for {model_dict["name"]} version {model_dict["id"]}.\n')
     """        
         # or parse command parameters from the 'command_raw' directive.
         elif 'directive' in metadata:
@@ -142,7 +140,7 @@ def print_params(model: str,  model_dict: dict, params_filename: str = 'params_t
 
                 command_raw = directive["command_raw"]
                 command = directive["command"]
-                print('\nExample parameters:\n')
+                click.echo('\nExample parameters:\n')
         
                 for param_name in param_type_dict:
                     if not command.__contains__(param_name):
@@ -174,7 +172,7 @@ def print_params(model: str,  model_dict: dict, params_filename: str = 'params_t
                     param_value = shlex.split(param_value, posix=True)[0].strip()                       
                     output_params[param_name] = param_value
 
-                    print(f'{param_name}: {param_value}')        
+                    click.echo(f'{param_name}: {param_value}')        
             else:
                 for param_name in param_type_dict:
                     output_params[param_name] = ""
@@ -199,20 +197,20 @@ def print_versions(model: str, versions: dict):
         }
     """
 
-    print(f'\nAvailable versions of "{model}":\n')
+    click.echo(f'\nAvailable versions of "{model}":\n')
     
-    print('Current Version')
-    print(f'"{versions["current_version"]}"')
+    click.echo('Current Version')
+    click.echo(f'"{versions["current_version"]}"')
 
-    print('\nPrevious Versions')
+    click.echo('\nPrevious Versions')
     for pv in versions["prev_versions"]:
-        print(f'"{pv}"')
+        click.echo(f'"{pv}"')
 
-    print('\nLater Versions')
+    click.echo('\nLater Versions')
     for lv in versions["later_versions"]:
-        print(f'"{lv}"')
+        click.echo(f'"{lv}"')
 
-    print()
+    click.echo()
 
 
 @click.group()
@@ -232,9 +230,9 @@ def describe(model, version, config):
         return
 
     if version is None:
-        click.echo(f'\nGetting the description for "{model}" ...')
+        click.echo(f'\nGetting the description of "{model}" ...\n')
     else:
-        click.echo(f'\nGetting the description for model version "{version}" ...')
+        click.echo(f'\nGetting the description of model version "{version}" ...\n')
 
     dc = DojoClient(config)
     model_dict = dc.get_model_info(model, version)
@@ -277,6 +275,8 @@ def outputs(model, config, version):
 
     dc = DojoClient(config)
     model_dict = dc.get_model_info(model, version)
+    if model is None:
+        model = model_dict["name"]
     model_id = model_dict["id"]
     outputfile_dict = dc.get_outputfiles(model_id)
     # Call a seperate print_params function to keep things clean.
@@ -307,7 +307,56 @@ def parameters(model, config, version):
         return
 
     # Call a seperate print_params function to keep things clean.
-    print_params(model, model_dict)
+    print_params(model_dict)
+
+
+@cli.command()
+@click.option("--model", type=str, default=None, help="the model name e.g. CHIRPS-Monthly")
+@click.option("--config", type=str, default=".config", help="configuration json filename (defaults to .config)")
+@click.option("--paramsfile", type=str, default="params_template.json", help="model run parameters filename")
+@click.option("--params", type=str, default=None, help='json parameters e.g. --params=\{"temp": 0.05\}')
+@click.option("--outputdir", type=str, default=None, help="model output directory")
+@click.option("--version", type=str, default=None, help="optional version id e.g. ceedd3b0-f48f-43d2-b279-d74be695ed1c")
+@click.option("--attached", type=bool, default=True, help="wait for model completion")
+def runmodel(model, config, paramsfile, params, outputdir: str = None, version: str = None, attached: bool = True):
+    """Run a model."""
+
+    # Confirm options and params.
+    if (model is None and version is None):
+        click.echo('\neither --model or --version is required.\n')
+        return
+    elif params==None:
+        # If --params json is not passed, then --paramsfile, or the default --paramsfile, must exist.
+        # Try opening the file before running the model.
+        if not exists(paramsfile):
+            click.echo("\n--paramfile not found and --params is blank.\nOne of either --paramfile or --params is required.\n")
+            return
+
+    dc = DojoClient(config)
+
+    # Get the model_id and image from the model_name or version.
+    model_dict = dc.get_model_info(model, model_id=version)
+    if version is None:
+        version = model_dict["id"]
+    elif model is None:
+        model = model_dict["name"]
+
+    # Check if the user is attempting to run a model that does not have an image.
+    if len(model_dict["image"].strip()) == 0:
+        click.echo(f'{model} version {version} does not have a Docker image associated with it and therefore cannot be run.')
+        click.echo(f'\nThe following versions of {model} have images and are available to run:')
+        versions = dc.get_model_versions_with_images(model)
+        
+        if len(versions) == 0:
+            click.echo('\nNo versions of this model with an image are available.')
+        else:
+            for t in versions:
+                click.echo(f'created date: {t[0]}  version: {t[1]}')
+        return
+
+    click.echo(f"\nRunning model {model} version \"{version}\" ...\n")
+
+    dc.run_model(model, params, paramsfile, version, local_output_folder = outputdir, run_attached=attached)
 
 
 @cli.command()
@@ -332,37 +381,6 @@ def versions(model, config):
     # Call a seperate print_versions function to keep things clean.
     print_versions(model, versions)
 
-@cli.command()
-@click.option("--model", type=str, default=None, help="the model name e.g. CHIRPS-Monthly")
-@click.option("--config", type=str, default=".config", help="configuration json filename (defaults to .config)")
-@click.option("--paramsfile", type=str, default="params_template.json", help="model run parameters filename")
-@click.option("--params", type=str, default=None, help='json parameters e.g. --params=\{"temp": 0.05\}')
-@click.option("--outputdir", type=str, default=None, help="model output directory")
-@click.option("--version", type=str, default=None, help="optional version id e.g. ceedd3b0-f48f-43d2-b279-d74be695ed1c")
-@click.option("--attached", type=str, default=True, help="wait for model completion")
-
-def runmodel(model, config, paramsfile, params, outputdir: str = None, version: str = None, attached: bool = True):
-    """Run a model."""
-
-    if (model is None and version is None):
-        click.echo('\neither --model or --version is required.\n')
-        return
-    elif params==None:
-        # If --params json is not passed, then --paramsfile, or the default --paramsfile, must exist.
-        # Try opening the file before running the model.
-        if not exists(paramsfile):
-            click.echo("\n--paramfile not found and --params is blank.\nOne of either --paramfile or --params is required.\n")
-            return
-
-    if version is None:
-        click.echo(f"\nRunning \"{model}\" ...\n")
-    else:
-        click.echo(f"\nRunning model version \"{version}\" ...\n")
-
-    dc = DojoClient(config)
-    dc.run_model(model, params, paramsfile, version, local_output_folder = outputdir, run_attached=attached)
-
 
 if __name__ == "__main__":     
     cli()
-    #runmodel(model="CHIRPS-GEFS Monthly", params=None, config=".config", paramsfile="params_template.json", outputdir=None, attached=True)

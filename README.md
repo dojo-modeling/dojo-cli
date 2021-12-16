@@ -2,13 +2,14 @@
 
 A command-line interface library for black box domain model execution. This library enables users to execute domain models locally.
 
-The library has 5 key methods:
+The library has 6 key methods:
 
-- List the latest versions of models.
+- List the latest versions of all available models.
 - Print parameter metadata for a selected model.
 - Print a summary of the output files of a selected model.
 - Print a desription of a selected model.
 - Run a model.
+- List all versions of a model.
 
 ## Installation
 
@@ -39,6 +40,7 @@ If running the library locally from source, the following libraries are required
 ```
 Click>=7.0,<8
 docker>=5.0.3
+Jinja2>=2.11.3
 ```
 
 ## CLI help
@@ -52,6 +54,7 @@ dojo listmodels --help
 dojo outputs --help
 dojo parameters --help
 dojo runmodel --help
+dojo versions --help
 ```
 
 ## Available commands
@@ -61,6 +64,7 @@ dojo runmodel --help
 -  [outputs](#outputs): Print descriptions of the output files produced by a model.
 -  [parameters](#parameters): Print the parameters required to run a model.
 -  [runmodel](#runmodel): Run a model.
+-  [versions](#versions): List all versions of a model.
 
 
 ## *describe*
@@ -70,10 +74,10 @@ Print a description of the model.
 ### Parameters
 - `--model` : name of the model
 - `--config` : name of configuation file; defaults to *.config*
-
+- `--version` : version of the model if `--model` is not passed
 ### Example
 
-`python dojo/cli.py describe --model="Population Model"`
+`dojo describe --model="Population Model"`
 ```
 NAME
 ----
@@ -100,7 +104,7 @@ List available models.
 
 ### Example
 
-$ `python dojo/cli.py listmodels`
+$ `dojo listmodels`
 ```
 (1) APSIM
 (2) APSIM-Cropping
@@ -123,10 +127,11 @@ Prints a summary of the output files produced by a model.
 ### Parameters
 - `--model` : name of the model
 - `--config` : name of configuation file; defaults to *.config*
+- `--version` : version of the model if `--model` is not passed
 
 ### Example
 
-`dojo ouputs --model=Topoflow`
+`dojo outputs --model=Topoflow`
 
 ```
 Getting output file information for Topoflow ...
@@ -167,7 +172,7 @@ Prints a description of model parameters and writes an example to file.
 ### Parameters
 - `--model` : name of the model
 - `--config` : name of configuation file; defaults to *.config*
-
+- `--version` : version of the model if `--model` is not passed
 ### Example
 
 `dojo parameters --model=CHIRPS-Monthly`
@@ -225,38 +230,112 @@ Runs the selected model used the specified model parameters.
 - `--config` : name of configuation file; defaults to *.config*
 - `--params` : model parameters in JSON format
 - `--paramsfile` : name of file of model parameters in JSON format; defaults to *params_template.json*.
-- `--outputdir` : folder specified for model output files; defaults to  */runs/{model}/{datetime}* e.g. */dojo-cli/runs/CHIRTSmax-Monthly/20210403110420*.
+- `--outputdir` : folder specified for model output files; defaults to  */runs/{model}/{version}/{datetime}* e.g. */dojo-cli/runs/CHIRTSmax-Monthly/17bf37e3-3785-43be-a2a3-fec6add03376/20210403110420*
+- `--version` : version of the model if `--model` is not passed
+- `--attached` : True or False, defaults to True. 
+  - If `attached`=`True` or is not passed, the cli will wait for the model to run in the container and then remove the container. 
+  - If `attached`=`False` the model will run in the container in background. The user will need to monitor the output folder or container to determine when the run is completed. 
 
 To run a model, the parameter values should either be assigned via the `--params` option , or a json file specified via the `--paramsfile` option. If neither parameter option is set, the --paramsfile filename *params_template.json* will be used.
 
-After processing `runmodel` will print the local directory where the model output and accessory (e.g. .mp4, .webm, .jpg) files are available. The local directory tree structure will consist of the model name and a datetime stamp of the model run (unless specified by the `--outputdir` option)e.g.
+After processing `runmodel` will print the local directory where the model output and accessory (e.g. .mp4, .webm, .jpg) files are available. The local directory tree structure will consist of the model name, the model version, and a datetime stamp of the model run (unless specified by the `--outputdir` option) e.g.:
 ```
 /runs
  | - Stochastic Gridded Conflict Model
-    |- 20211209160543
-       |- output
-          |- conflict_IDs.rti
-          |- ...
-       |- acessorries
-          |- conflict_IDs_2D.mp4
-           - ...
-       |- accessories-captions.json
-       |- run-parameters.json
+    |-17bf37e3-3785-43be-a2a3-fec6add03376
+        |- 20211209160543
+        |- output
+            |- conflict_IDs.rti
+            |- ...
+        |- acessorries
+            |- conflict_IDs_2D.mp4
+            - ...
+        |- accessories-captions.json
+        |- run-parameters.json
+        |- logs.txt
 ```
 
-In addition to the model's output and accessory files, `runmodel` will write two other files:
-- run-parameters.json : the model parameters used for this run
+In addition to the model's output and accessory files, `runmodel` will write three other files:
 - accessories-captions.json : descriptions of the files in *accessories* 
+- logs.txt : the log output produced by this run
+- run-parameters.json : the model parameters used for this run
 
 ### Examples
 
 (1) Run the CHIRPS-Monthly model using the default configuration settings in *.config* and model parameters in *params_template.json*:
 
-- ```dojo runmodel --model=CHIRPS-Monthly```
+```dojo runmodel --model="CHIRPS-Monthly"```
 
 (2) Run the CHIRPS-Monthly model using the default configuration settings in *.config* and model parameters in *chirps-monthly.json*:
-- ```dojo runmodel --model=CHIRPS-Monthly --paramsfile=chirps-monthly.json```
+
+```dojo runmodel --model="CHIRPS-Monthly" --paramsfile=chirps-monthly.json```
 
 (3) Run the CHIRPS-Monthly model using the default configuration settings in *.config* and specified model parameters:
-- ```dojo runmodel --model=CHIRPS-Monthly --params='{"month": "09", "year": "2016", "bounding_box": "[[33.512234, 2.719907], [49.98171,16.501768]]"}'```
 
+```dojo runmodel --model="CHIRPS-Monthly" --params='{"month": "09", "year": "2016", "bounding_box": "[[33.512234, 2.719907], [49.98171,16.501768]]"}'```
+
+(4) Run a specific version of CHIRPS-Monthly:
+
+```dojo runmodel --version="a14ccbdf-c8d5-4816-af52-8b2ef3da9d22"```
+
+(5) Run a specific version of CHIRPS-Monthly detached:
+
+```dojo runmodel --version="a14ccbdf-c8d5-4816-af52-8b2ef3da9d22" --attached=False```
+
+### Models missing Docker images
+
+In some instances a user may attempt to run a model version that does not have a docker image associated with it. If this occurs *dojo-cli* will list available model versions (most recent first). The user can then choose to run one of versions listed.
+
+```
+$ dojo runmodel --version="9d077a11-9db3-441c-a2ae-0ecacd1381f0"
+APSIM-Cropping version 9d077a11-9db3-441c-a2ae-0ecacd1381f0 does not have a Docker image associated with it and therefore cannot be run.
+
+The following versions of APSIM-Cropping are available to run:
+created date: 2021-12-14 16:14:44  version: ce2fc539-c734-4077-8b9c-2f82cd032049
+created date: 2021-12-08 19:41:17  version: c635fe68-9526-4719-8a15-9f6577bd9067
+created date: 2021-12-08 19:38:14  version: 53934f4c-04d8-4e02-920e-888208d68782
+created date: 2021-12-08 19:32:37  version: 90a77965-15b8-48f9-bf1e-6b25b29c44de
+created date: 2021-12-08 19:18:19  version: 229132d2-ad92-49d6-8639-7b240a05508b
+created date: 2021-12-07 20:28:52  version: 40efd965-0c5d-4ab0-8e88-c416a41c04df
+created date: 2021-12-01 15:45:33  version: 73560c5a-58a7-46a7-be0e-047c267d315e
+created date: 2021-11-28 16:23:12  version: a24b4539-15f3-4ee2-b802-4c7e092d19f2
+created date: 2021-11-28 16:20:40  version: 1b71a950-7580-49e5-a0f1-ecf9511fb1a7
+created date: 2021-11-28 16:20:11  version: 0e66a9c2-dbe3-4add-ab81-2e7502a7ad45
+created date: 2021-11-17 19:38:20  version: b99c87bd-cd0f-41d9-9bf7-2c93004c5e6b
+created date: 2021-11-17 19:33:39  version: 252b4f0a-ba15-4825-a155-1a3ca348da3b
+created date: 2021-11-17 17:30:58  version: e57e85cf-3a44-4a55-b63c-efb19af2527f
+created date: 2021-11-17 16:27:58  version: 32a238b9-5f16-4f6b-a085-b3e471be3dce
+created date: 2021-11-17 16:07:42  version: 915251a7-96eb-49ee-ac36-1a7db1e684bd
+created date: 2021-11-17 16:06:19  version: bb2793f1-526a-4796-b1b2-1006610e1d9e
+created date: 2021-11-17 16:05:13  version: 2ea95b10-f1dc-48b2-a675-82ca27fc03e6
+created date: 2021-11-17 16:00:43  version: 849d824c-a662-4da3-a131-d41c73afc42a
+created date: 2021-11-16 07:10:14  version: 2ff8502b-831e-4684-96cc-80f08da45f28
+```
+
+## *versions*
+
+### Description
+
+List all versions of a model.
+
+### Parameters
+- `--model` : name of the model 
+- `--config` : name of configuation file; defaults to *.config*
+
+### Example
+
+`dojo versions --model=CHIRPS-Monthly`
+```
+Getting versions of "CHIRPS-Monthly" ...
+
+Available versions of "CHIRPS-Monthly":
+
+Current Version
+"17bf37e3-3785-43be-a2a3-fec6add03376"
+
+Previous Versions
+"a14ccbdf-c8d5-4816-af52-8b2ef3da9d22"
+
+Later Versions
+
+```
