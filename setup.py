@@ -48,7 +48,7 @@ setup(
     package_data={'dojocli' : ['data/*']},
     packages=find_packages(include=["dojocli", "dojocli.*"]),
     test_suite="tests",
-    url="https://github.com/jataware/dojo-cli",
+    url="https://github.com/dojo-modeling/dojo-cli",
     version='0.1.0',
     zip_safe=False,
 )
