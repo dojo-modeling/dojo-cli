@@ -5,8 +5,10 @@ docker-py (https://pypi.org/project/docker-py/) client for dojo-api
 
 """
 
+from sys import float_repr_style, stderr
 import docker
 import click
+from docker.api.volume import VolumeApiMixin
 from tqdm import tqdm
 
 class DockerClient(object):
@@ -117,13 +119,26 @@ class DockerClient(object):
                 Option to run detached (in background.)
         
         """
+
+       
         if run_attached:
+            # The low-level API client requires formatting for volumes, and volumes_array to be passed in host_config.
+            # volume_array example:
+            # ['/home/user/source/repos/dojo-cli/runs/CHIRPS-Monthly/17bf37e3-3785-43be-a2a3-fec6add03376/20211217135801/output:/home/clouseau/results']
+            # volumes should be ['/home/clouseau/results']
+            volumes = [v.split(':')[1] for v in volume_array]
+            
+            # Create the container detached.
+            c = self.api_client.create_container(image_name, command=container_command, volumes=volumes, name=container_name, detach=False,
+                host_config=self.api_client.create_host_config(binds=volume_array))
+        
+            # Start the container.
+            self.api_client.start(c)
+
+            # Attach to the container and stream the logs.
             log_header = False
-            # Needs stderr=True to stream correctly. It looks like the run command
-            # must complete before the logs are streamed.
             logs=[]
-            for b in self.client.containers.run(image_name, command=container_command, volumes=volume_array, name=container_name, 
-                stderr=True, stdout=True, stream = True, auto_remove=True):
+            for b in self.api_client.logs(c, stream=True, stderr=True, stdout=True):
                 if not log_header:
                     click.echo('\nModel run logs:\n')
                     log_header = True

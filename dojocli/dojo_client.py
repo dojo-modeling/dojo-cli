@@ -27,6 +27,20 @@ class DojoClient(object):
                 click.echo(e)
             exit
 
+    def get_accessories(self, model_id: str):
+        """
+        Description
+        -----------
+        Call dojo endpoint dojo/accessories to get model accessory file metadata.
+
+        Returns
+        -------
+        dict of JSON payload of api call.
+
+        """
+
+        return self.get_dojo_stuff('accessories', model_id)
+
     def get_available_models(self):
         """
         Description

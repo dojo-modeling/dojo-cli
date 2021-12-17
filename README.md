@@ -6,7 +6,7 @@ The library has 6 key methods:
 
 - List the latest versions of all available models.
 - Print parameter metadata for a selected model.
-- Print a summary of the output files of a selected model.
+- Print a summary of the output and accessory files of a selected model.
 - Print a desription of a selected model.
 - Run a model.
 - List all versions of a model.
@@ -61,7 +61,7 @@ dojo versions --help
 
 -  [describe](#describe): Print a description of the model.
 -  [listmodels](#listmodels): List available models.
--  [outputs](#outputs): Print descriptions of the output files produced by a model.
+-  [outputs](#outputs): Print descriptions of the output and accessory files produced by a model.
 -  [parameters](#parameters): Print the parameters required to run a model.
 -  [runmodel](#runmodel): Run a model.
 -  [versions](#versions): List all versions of a model.
@@ -122,7 +122,7 @@ $ `dojo listmodels`
 
 ### Description
 
-Prints a summary of the output files produced by a model.
+Prints a summary of the output and accessory files produced by a model.
 
 ### Parameters
 - `--model` : name of the model
@@ -161,6 +161,17 @@ Topoflow writes 4 output file(s):
     X: longitude
     datetime: Datetime
     u: Mean Channel Flow Velocity
+
+"Topoflow" version 2ddd2cbe-364b-4520-a28e-a5691227db39 writes 8 accessory file(s):
+
+(1) Test1_0D-Q.png
+(2) Test1_0D-d-flood.png
+(3) Test1_0D-d.png
+(4) Test1_0D-u.png
+(5) Test1_2D-Q.mp4
+(6) Test1_2D-d-flood.mp4
+(7) Test1_2D-d.mp4
+(8) Test1_2D-u.mp4
 ```
 
 ## *parameters*

@@ -1,5 +1,5 @@
 import sys
-from os.path import exists, dirname, abspath
+from os.path import abspath, basename, dirname, exists
 
 # Add path of the run files to the system path so VS Code can find things. 
 sys.path.append(dirname(dirname(abspath(__file__))))
@@ -47,24 +47,33 @@ def print_description(model_dict: dict):
 
     click.echo()
 
-def print_outputfiles(model: str, version: str, outputfile_dict: dict):
+def print_outputs(model: str, version: str, outputfile_dict: dict, accessories_dict: dict):
     """
     Description
     -----------
-    Called from cli.printoutputs(). Prints information about the model output files.
+    Called from cli.printoutputs(). Prints information about the model output
+    and accessory files.
     
     """
 
+    # Output files
     click.echo(f'\n"{model}" version {version} writes {len(outputfile_dict)} output file(s):\n')
-
     for idx, outputfile in enumerate(outputfile_dict):
         transform = outputfile["transform"]
         click.echo(f'({idx+1}) {outputfile["path"]}: {outputfile["name"]} in {transform["meta"]["ftype"]} format with the following labeled data:')
-        #click.echo(f'({idx+1}) {outputfile["name"]} in {transform["meta"]["ftype"]} file {outputfile["path"]} with the following labeled data:')
         for transform_type in ['geo', 'date', 'feature']:
             for data_type in transform[transform_type]:
                 click.echo(f'    {data_type["name"]}: {data_type["display_name"]}')
         click.echo()
+
+    # Accessories
+    if len(accessories_dict) > 0:
+        accessories = [basename(acc["path"]) for acc in accessories_dict]
+        accessories.sort()
+        click.echo(f'\n"{model}" version {version} writes {len(accessories)} accessory file(s):\n')
+        for idx, acc in enumerate(accessories):
+            click.echo(f'({idx+1}) {acc}')
+
     click.echo()
 
 def print_params(model_dict: dict, params_filename: str = 'params_template.json'):
@@ -262,7 +271,7 @@ def listmodels(config):
 @click.option("--config", type=str, default=".config", help="configuration json filename (defaults to .config)")
 @click.option("--version", type=str, default=None, help="optional version id e.g. ceedd3b0-f48f-43d2-b279-d74be695ed1c")
 def outputs(model, config, version):
-    """Print descriptions of the output files produced by a model."""
+    """Print descriptions of the output and accessory files produced by a model."""
 
     if (model is None and version is None):
         click.echo('\neither --model or --version is required.\n')
@@ -279,8 +288,9 @@ def outputs(model, config, version):
         model = model_dict["name"]
     model_id = model_dict["id"]
     outputfile_dict = dc.get_outputfiles(model_id)
-    # Call a seperate print_params function to keep things clean.
-    print_outputfiles(model, model_id, outputfile_dict)
+    accessories_dict = dc.get_accessories(model_id)
+    # Call a seperate print_outputfiels function to keep things clean.
+    print_outputs(model, model_id, outputfile_dict, accessories_dict)
 
 
 @cli.command()
