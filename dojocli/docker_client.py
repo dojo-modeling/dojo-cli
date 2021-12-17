@@ -130,7 +130,7 @@ class DockerClient(object):
             
             # Create the container detached.
             c = self.api_client.create_container(image_name, command=container_command, volumes=volumes, name=container_name, detach=False,
-                host_config=self.api_client.create_host_config(binds=volume_array))
+                host_config=self.api_client.create_host_config(binds=volume_array, auto_remove=True))
         
             # Start the container.
             self.api_client.start(c)
