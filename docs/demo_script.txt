@@ -1,0 +1,314 @@
+# ----------------------------------------------------------------------------
+# Dojo-cli demo script
+# ... ... ... denotes breaks in the output
+# cut-and-paste the below (Linux Instructions)
+# ----------------------------------------------------------------------------
+# Install Dojo-cli
+# ----------------------------------------------------------------------------
+
+pip install dojo-cli
+
+
+
+# ----------------------------------------------------------------------------
+# Create a working directory for dojo.
+# ----------------------------------------------------------------------------
+
+mkdir ~/dojotest
+cd ~/dojotest
+
+
+
+# ----------------------------------------------------------------------------
+# Create the .config file used to connect to the dojo API.
+# ----------------------------------------------------------------------------
+
+~/dojotest $ touch .config
+
+
+
+# ----------------------------------------------------------------------------
+# Cut/ paste the following into .config, completing DOJO_USER and _PWD fields:
+# ----------------------------------------------------------------------------
+
+{  
+    "DOJO_URL": "https://dojo-test.com",
+    "DOJO_USER": "",
+    "DOJO_PWD": ""
+}
+
+~/dojotest $ nano .config
+
+
+
+# ----------------------------------------------------------------------------
+# Test dojo is installed.
+# ----------------------------------------------------------------------------
+
+~/dojotest $ dojo
+
+Usage: dojo [OPTIONS] COMMAND [ARGS]...
+
+Options:
+  --help  Show this message and exit.
+
+Commands:
+  describe    Print a description of the model.
+  listmodels  List available models.
+  outputs     Print descriptions of the output and accessory files produced...
+  parameters  Print the parameters required to run a model.
+  runmodel    Run a model.
+  versions    Print all registered versions of a model.
+
+
+# ----------------------------------------------------------------------------
+# List available models.
+# ----------------------------------------------------------------------------
+
+~/dojotest $ dojo listmodels
+
+Listing available models ...
+
+( 1) "APSIM"
+( 2) "APSIM-Cropping"
+( 3) "APSIM-Rangelands"
+...
+(33) "Stochastic Gridded Conflict Model"
+(34) "TWIST and static FSC"
+(35) "TWIST"
+(36) "TopoFlow36_for_Tana_River_Kenya"
+(37) "Topoflow"
+(38) "Water and Sanitation Model"
+
+
+
+# ----------------------------------------------------------------------------
+# Describe "Stochastic Gridded Conflict Model"
+# ----------------------------------------------------------------------------
+
+~/dojotest $ dojo describe --model="Stochastic Gridded Conflict Model"
+
+Getting the description of "Stochastic Gridded Conflict Model" ...
+
+NAME
+----
+Stochastic Gridded Conflict Model
+
+VERSION
+----
+33cf1a60-2544-420f-ae08-b453a9751cfc
+
+MODEL FAMILY
+------------
+Kimetrica
+
+... ... ...
+
+DOCKER IMAGE
+------------
+jataware/dojo-publish:StochasticGriddedConflictModel-20211129.1740
+
+PARAMETERS
+----------
+Number of timesteps
+Start date
+Time units
+Conflict emergence factor
+Conflict local spreading factor
+Conflict nonlocal spreading factor
+Conflict resolution probability
+
+
+
+# ----------------------------------------------------------------------------
+# List the output and accessory files for "Stochastic Gridded Conflict Model"
+# ----------------------------------------------------------------------------
+
+~/dojotest $ dojo outputs --model="Stochastic Gridded Conflict Model"
+
+Getting output file information for "Stochastic Gridded Conflict Model" ...
+
+"Stochastic Gridded Conflict Model" version 33cf1a60-2544-420f-ae08-b453a9751cfc writes 2 output file(s):
+
+(1) conflict_IDs_2D.nc: IDs of unique space-time conflicts in netcdf format with the following labeled data:
+    Y: Y
+    X: Longitude
+    datetime: Grid date and time
+    conflict_IDs: IDs of different space-time conflicts
+
+(2) conflicts_2D.nc: Presence of conflict in space and time in netcdf format with the following labeled data:
+    Y: Y
+    X: Longitude
+    datetime: Grid date and time
+    conflict_S: Presence of conflict
+
+
+"Stochastic Gridded Conflict Model" version 33cf1a60-2544-420f-ae08-b453a9751cfc writes 4 accessory file(s):
+
+(1) conflict_IDs_2D.mp4
+(2) conflict_IDs_2D.webm
+(3) conflicts_2D.mp4
+(4) conflicts_2D.webm
+
+
+
+# ----------------------------------------------------------------------------
+# List the parameters for "Stochastic Gridded Conflict Model"
+# This also writes params_template.json, which is the default parmas file
+# used by runmodel.
+# ----------------------------------------------------------------------------
+
+~/dojotest $ dojo parameters --model="Stochastic Gridded Conflict Model"
+
+Getting parameters for "Stochastic Gridded Conflict Model" ...
+Parameter 1     : Number of timesteps
+Description     : The number of timesteps for which to run the model.  The duration of a single timestep is determined by the time_units parameter.  Model runtime is proportional to n_steps.
+Type            : int
+Unit            : none
+Unit Description: n/a
+Default Value   : 365
+
+Parameter 2     : Start date
+
+... ... ...
+
+Example parameters:
+number_of_timesteps: 365
+start_date: 2021-01-01
+time_units: days
+conflict_emergence_factor: 0.002
+conflict_local_spreading_factor: 0.1
+conflict_nonlocal_spreading_factor: 0.0
+conflict_resolution_probability: 0.4
+
+Example Stochastic Gridded Conflict Model version 33cf1a60-2544-420f-ae08-b453a9751cfc template parameters file written to params_template.json.
+
+
+
+# ----------------------------------------------------------------------------
+# Examine the default parameters file params_template.json
+# ----------------------------------------------------------------------------
+
+~/dojotest $ ls -al
+total 16
+drwxrwxr-x  2 user user 4096 Dec 20 09:55 .
+drwxr-xr-x 67 user user 4096 Dec 20 09:45 ..
+-rw-rw-r--  1 user user  103 Dec 20 09:46 .config
+-rw-rw-r--  1 user user  267 Dec 20 09:55 params_template.json
+
+~/dojotest $ cat params_template.json
+{
+    "number_of_timesteps": 365,
+    "start_date": "2021-01-01",
+    "time_units": "days",
+    "conflict_emergence_factor": 0.002,
+    "conflict_local_spreading_factor": 0.1,
+    "conflict_nonlocal_spreading_factor": 0.0,
+    "conflict_resolution_probability": 0.4
+}
+
+
+
+# ----------------------------------------------------------------------------
+# Run "Stochastic Gridded Conflict Model" with the default parameters.
+# This will download and run the model.
+# While running, model output to stdout and stderr will be printed to screen.
+# When finished, dojo will note the output directory.
+# ----------------------------------------------------------------------------
+
+~/dojotest $ dojo runmodel --model="Stochastic Gridded Conflict Model"
+
+Running model Stochastic Gridded Conflict Model version "33cf1a60-2544-420f-ae08-b453a9751cfc" ...
+
+Getting model image ...
+
+StochasticGriddedConflictModel-20211129.1740 Pulling from jataware/dojo-publish  
+16ec32c2132b Already exists  
+
+... ... ...
+
+6c5e371235f9 Already exists  
+0819cacb5f0b Already exists  
+5bbbe0bc548b Already exists  
+a3ed95caeb02 Already exists  ==============================>                 ]  840.8MB/1.25GB
+008f81e20bea Already exists                                                                
+25f7232f55c2 Download complete                                                                 
+02298d7ac204 Download complete                                                                 
+8fa1e0af11f2 Download complete  
+878e6e6124d8 Downloading [=================================>                 ]  840.8MB/1.25G
+
+8fa1e0af11f2 Pull complete  1d3803d3383a6a6d8a9bd23e0525e4fa9d1ed9827ec9f7a87d9
+Status: Downloaded newer image for jataware/dojo-publish:StochasticGriddedConflictModel-20211129.1740
+Status: Downloaded newer image for jataware/dojo-publish:StochasticGriddedConflictModel-20211129.1740
+
+Running Stochastic Gridded Conflict Model version 33cf1a60-2544-420f-ae08-b453a9751cfc in Docker container dojo-stochasticgriddedconflictmodel20211220100324 ... 
+
+The model is running attached; this process will wait until the run is completed.
+
+Model run logs:
+
+Importing Conflict 0.5 package modules:
+conflict.utils
+
+Reading grid from GeoTIFF file...
+GeoTIFF grid info:
+./input_files/Horn_of_Africa_GPW-v4_pop_count_2020_450sec.tif
+ncols  = 240
+nrows  = 240
+xres   = 450.0  [arcsecs]
+yres   = 450.0  [arcsecs]
+dtype  = float32
+bounds = [25.0, -5.0, 55.0, 25.0]
+
+... ... ...
+
+Converting mp4 to webm format with opacity...
+Finished converting mp4 to webm format with opacity.
+opacity = 0.7
+
+
+
+Run completed.
+Model output, run-parameters, and log files are located in /home/user/dojotest/runs/Stochastic Gridded Conflict Model/33cf1a60-2544-420f-ae08-b453a9751cfc/20211220100324.
+
+
+
+# ----------------------------------------------------------------------------
+# Examine the model output directory.
+# ----------------------------------------------------------------------------
+
+~/dojotest $ ls -al "/home/user/dojotest/runs/Stochastic Gridded Conflict Model/33cf1a60-2544-420f-ae08-b453a9751cfc/20211220100324"
+total 88
+drwxrwxr-x 4 user user  4096 Dec 20 10:06 .
+drwxrwxr-x 3 user user  4096 Dec 20 10:05 ..
+drwxr-xr-x 2 user user  4096 Dec 20 10:06 accessories
+-rw-rw-r-- 1 user user  1304 Dec 20 10:03 accessories-captions.json
+-rw-rw-r-- 1 user user 64734 Dec 20 10:06 logs.txt
+drwxr-xr-x 2 user user  4096 Dec 20 10:04 output
+-rw-rw-r-- 1 user user   267 Dec 20 10:03 run-parameters.json
+
+
+~/dojotest $ ls -al "/home/user/dojotest/runs/Stochastic Gridded Conflict Model/33cf1a60-2544-420f-ae08-b453a9751cfc/20211220100324/accessories"
+total 1052
+drwxr-xr-x 2 user user   4096 Dec 20 10:06 .
+drwxrwxr-x 4 user user   4096 Dec 20 10:06 ..
+-rw-r--r-- 1 user user 129178 Dec 20 10:05 conflict_IDs_2D.mp4
+-rw-r--r-- 1 user user 352417 Dec 20 10:06 conflict_IDs_2D.webm
+-rw-r--r-- 1 user user 156592 Dec 20 10:06 conflicts_2D.mp4
+-rw-r--r-- 1 user user 418961 Dec 20 10:06 conflicts_2D.webm
+
+
+~/dojotest $ ls -al "/home/user/dojotest/runs/Stochastic Gridded Conflict Model/33cf1a60-2544-420f-ae08-b453a9751cfc/20211220100324/output"
+total 328696
+drwxr-xr-x 2 user user     4096 Dec 20 10:04 .
+drwxrwxr-x 4 user user     4096 Dec 20 10:06 ..
+-rw-r--r-- 1 user user 84175037 Dec 20 10:04 conflict_IDs_2D.nc
+-rw-r--r-- 1 user user     2273 Dec 20 10:04 conflict_IDs_2D.rti
+-rw-r--r-- 1 user user     2271 Dec 20 10:04 conflict_IDs.rti
+-rw-r--r-- 1 user user 84096000 Dec 20 10:04 conflict_IDs.rts
+-rw-r--r-- 1 user user 84175011 Dec 20 10:04 conflicts_2D.nc
+-rw-r--r-- 1 user user     2271 Dec 20 10:04 conflicts_2D.rti
+-rw-r--r-- 1 user user     2269 Dec 20 10:04 conflicts.rti
+-rw-r--r-- 1 user user 84096000 Dec 20 10:04 conflicts.rts
+
+
