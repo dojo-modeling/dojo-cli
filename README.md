@@ -23,6 +23,15 @@ sudo gpasswd -a $USER docker
 ```
 then log out/back in so changes can take effect. This should be done after installing Docker.
 
+Dojo-cli can be installed via `pip`:
+```
+pip install dojo-cli
+```
+
+## Demo script
+
+A text file listing commands for dojo-cli installation and use is located at [/docs/demo_script.txt](/docs/demo_script.txt).
+
 ## Setup
 
 The CLI requires a configuration file with [DOJO API](https://github.com/dojo-modeling) credentials. This filename can be passed with each CLI command via the `--config` option, or the default file *.config* will be used.

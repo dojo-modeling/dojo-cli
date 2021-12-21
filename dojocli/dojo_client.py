@@ -25,7 +25,6 @@ class DojoClient(object):
                 click.echo(e.message)
             else:
                 click.echo(e)
-            exit
 
     def get_accessories(self, model_id: str):
         """
