@@ -18,10 +18,66 @@ class DockerClient(object):
         self.client = docker.from_env()
         self.container = None
 
+    def create_container(self, image_name, container_name, container_command, run_attached: bool = True):
+        """
+        Description
+        -----------
+            Create a container from the image identified by the image_name
+            parameter and run the container_command. 
+
+        Parameters
+        ----------
+            image_name: str
+                The name of the model docker image pulled from Docker Hub.
+            
+            container_name: str
+                An informative name for the container instead of gibberish like "stinky_goiter".
+
+            container_command: str
+                The model command to pass to command e.g."python3 mymodel.py".
+
+            run_attached: bool = True
+                Option to run detached (in background.)
+        
+        Returns
+        -------
+            The created container either stopped or detached and running.
+        """
+
+       
+        if run_attached:         
+            # Create the container detached.
+            self.container = self.api_client.create_container(image_name, command=container_command, name=container_name, detach=False,
+                host_config=self.api_client.create_host_config(auto_remove=False))
+        
+            # Start the container.
+            self.api_client.start(self.container)
+
+            # Attach to the container and stream the logs.
+            log_header = False
+            logs=[]
+            for b in self.api_client.logs(self.container, stream=True, stderr=True, stdout=True):
+                if not log_header:
+                    click.echo('\nModel run logs:\n')
+                    log_header = True
+                line = b.decode("utf-8")
+                logs.append(line)
+                click.echo(line.strip())
+            return self.container
+        else:
+            # If running detached, client.containers.run returns the container object.
+            self.container = self.client.containers.run(image_name, command=container_command, stdin_open=True, stdout=True, detach=True, name=container_name)
+            return self.container
+
     def execute_command(self, model_command):
-        click.echo(f'\nExecuting {model_command} in {self.container.name}.')
-        exe = self.api_client.exec_create(container=self.container.name, cmd=model_command)
+        #click.echo(f'\nExecuting {model_command} in {self.container.name}.\n')
+        exe = self.api_client.exec_create(container=self.container.name, cmd=model_command, stdin=True)
         self.api_client.exec_start(exe)
+
+        # For testing:
+        #print(self.api_client.exec_inspect(exe))
+        #for l in self.api_client.exec_start(exe, stream=True):
+        #    print(l)
 
     def get_logs(self, container_name):
         """
@@ -32,6 +88,47 @@ class DockerClient(object):
         """
 
         return self.api_client.logs(container_name, timestamps=True)
+
+    def is_running(self, container_id: str = None, container_name: str = None):
+        if container_id is not None:
+            try:
+                result = self.api_client.inspect_container(container_id)
+                if 'State' in result:
+                    if 'Running' in result['State']:
+                        return(result['State']['Running'])
+                raise docker.errors.NotFound
+            except docker.errors.NotFound:
+                click.echo(f'No information found for a docker container with id {container_id}.')
+                return None
+        elif container_name is not None:
+            try:
+                result = self.api_client.inspect_container(container_name)
+                if 'State' in result:
+                    if 'Running' in result['State']:
+                        return(result['State']['Running'])
+                raise docker.errors.NotFound
+            except docker.errors.NotFound:
+                click.echo(f'No information found for a docker container {container_name}.')
+                return None
+
+    def list_containers(self, model: str):
+        """
+        Description
+        -----------
+            Returns a list of container ids based on the model name.
+
+        Parameters
+        ----------
+            model: str
+            The name of the model.
+
+        Returns
+        -------
+            List of container ids.
+
+        """
+        containers = self.client.containers.list(all=True, filters={'name':model})
+        return [c.id for c in containers]
 
     def pull_image(self, image_name):
         """
@@ -93,65 +190,6 @@ class DockerClient(object):
             # Set the description str referred by bar_format-'{desc}' in t.
             t.set_description_str(text)
    
-    def create_container(self, image_name, volume_array, container_name, container_command, run_attached: bool = True):
-        """
-        Description
-        -----------
-            Create a container from the image identified by the image_name
-            parameter and run the container_command. 
-
-        Parameters
-        ----------
-            image_name: str
-                The name of the model docker image pulled from Docker Hub.
-            
-            volume_array: list/array
-                Array of dictionary pairs of local_volume:container volume for volume mounts.
-
-            container_name: str
-                An informative name for the container instead of gibberish like "stinky_goiter".
-
-            container_command: str
-                The str to pass to command. Consists of the chown output file commands and the model command.
-                e.g.: "bash -c 'sudo chown clouseau:clouseau outputdir && python3 mymodel.py'"
-
-            run_attached: bool = True
-                Option to run detached (in background.)
-        
-        """
-
-       
-        if run_attached:
-            # The low-level API client requires formatting for volumes, and volumes_array to be passed in host_config.
-            # volume_array example:
-            # ['/home/user/source/repos/dojo-cli/runs/CHIRPS-Monthly/17bf37e3-3785-43be-a2a3-fec6add03376/20211217135801/output:/home/clouseau/results']
-            # volumes should be ['/home/clouseau/results']
-            volumes = [v.split(':')[1] for v in volume_array]
-            
-            # Create the container detached.
-            c = self.api_client.create_container(image_name, command=container_command, volumes=volumes, name=container_name, detach=False,
-                host_config=self.api_client.create_host_config(binds=volume_array, auto_remove=True))
-        
-            # Start the container.
-            self.api_client.start(c)
-
-            # Attach to the container and stream the logs.
-            log_header = False
-            logs=[]
-            for b in self.api_client.logs(c, stream=True, stderr=True, stdout=True):
-                if not log_header:
-                    click.echo('\nModel run logs:\n')
-                    log_header = True
-                line = b.decode("utf-8")
-                logs.append(line)
-                click.echo(line.strip())
-            return logs
-        else:
-            # If running detached, client.containers.run returns the container object.
-            self.container = self.client.containers.run(image_name, command=container_command, stdin_open=True, stdout=True, detach=True, 
-                volumes=volume_array, name=container_name)
-            return self.container
-
     def remove_container(self, container_name):
         """
         Description
