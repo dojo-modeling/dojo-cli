@@ -319,7 +319,7 @@ After processing `runmodel` will print the local directory where the model outpu
             - ...
         |- accessories-captions.json
         |- logs.txt
-        |- run-info.txt
+        |- run-info.txt (only when running --attached=False)
         |- run-parameters.json
 ```
 
