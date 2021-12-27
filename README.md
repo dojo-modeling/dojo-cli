@@ -2,12 +2,13 @@
 
 A command-line interface library for black box domain model execution. This library enables users to execute domain models locally.
 
-The library has 6 key methods:
+The library has 7 key methods:
 
 - List the latest versions of all available models.
 - Print parameter metadata for a selected model.
 - Print a summary of the output and accessory files of a selected model.
 - Print a desription of a selected model.
+- Get the results of a detached model run that has finished.
 - Run a model.
 - List all versions of a model.
 
@@ -22,6 +23,19 @@ sudo groupadd docker
 sudo gpasswd -a $USER docker
 ```
 then log out/back in so changes can take effect. This should be done after installing Docker.
+
+Dojo-cli can be installed via `pip`:
+```
+pip install dojo-cli
+```
+
+## Demo script
+
+A text file demonstrating the commands for dojo-cli installation and use is located at [/docs/demo_script.txt](/docs/demo_script.txt).
+
+## Running models attached vs. detached
+
+By default the `runmodel` command runs the model attached, which means **dojo** waits for processing to finish before returning control to the command line. For models that take a long time to process, the `--attached=False` parameter can be used with [runmodel](#runmodel) to run the model in background, and [results](#results) used to check for model run completion.
 
 ## Setup
 
@@ -53,6 +67,7 @@ dojo describe --help
 dojo listmodels --help
 dojo outputs --help
 dojo parameters --help
+dojo results --help
 dojo runmodel --help
 dojo versions --help
 ```
@@ -63,6 +78,7 @@ dojo versions --help
 -  [listmodels](#listmodels): List available models.
 -  [outputs](#outputs): Print descriptions of the output and accessory files produced by a model.
 -  [parameters](#parameters): Print the parameters required to run a model.
+-  [results](#results): Get the results of a model finished running detached.
 -  [runmodel](#runmodel): Run a model.
 -  [versions](#versions): List all versions of a model.
 
@@ -230,6 +246,46 @@ Additionally, `parameters` will write *params_template.json* with example model 
 }
 ``` 
 
+## *results*
+
+### Description
+
+This command is used for models that have been run **detached** e.g. `dojo runmodel -model="mymodel" --attached=False`. Normally, models that take a long time to run are executed detached.
+
+The *results* command will check whether the model run has completed, and if so, copy the output and logs to the local output folder.
+
+### Parameters
+
+- `--id` : id of the docker container
+- `--name` : name of the docker container
+- `--config` : name of configuation file; defaults to *.config*
+
+One of either `--id` or `--name` is required. When you run a model, the name of the model Docker container will be displayed e.g. 
+```
+Running Stochastic Gridded Conflict Model version 33cf1a60-2544-420f-ae08-b453a9751cfc in Docker container dojo-stochasticgriddedconflictmodel20211227133418
+```
+The model run Docker container id and name will also be listed in the file `run-info.txt` in the local output folder (see the *runmodel* section below for information regarding the output directory structure).
+
+The model run Docker container id and name can also be found by the command `docker ps -a`. Docker containers created by `dojo --runmodel` will have the `dojo-` prefix, followed by the model name and a datetime stamp.
+ 
+
+### Examples
+
+```dojo results --name=dojo-mymodel20211225133418```
+
+If the model is still running in the container, the above command will produce the following output: 
+
+```
+Results for mymodel20211225133418 are not yet ready.
+```
+
+when the model is finished, the output will be:
+```
+Run completed.
+Model output, run-parameters, and log files are located in "/mydojodata/runs/Stochastic Gridded Conflict Model/33cf1a60-2544-420f-ae08-b453a9751cfc/20211227140758".
+```
+
+
 ## *runmodel*
 
 ### Description
@@ -245,7 +301,7 @@ Runs the selected model used the specified model parameters.
 - `--version` : version of the model if `--model` is not passed
 - `--attached` : True or False, defaults to True. 
   - If `attached`=`True` or is not passed, the cli will wait for the model to run in the container and then remove the container. 
-  - If `attached`=`False` the model will run in the container in background. The user will need to monitor the output folder or container to determine when the run is completed. 
+  - If `attached`=`False` the model will run in the container in background. The user will use [dojo --results](#results) to monitor when the model run is finished. 
 
 To run a model, the parameter values should either be assigned via the `--params` option , or a json file specified via the `--paramsfile` option. If neither parameter option is set, the --paramsfile filename *params_template.json* will be used.
 
@@ -262,13 +318,15 @@ After processing `runmodel` will print the local directory where the model outpu
             |- conflict_IDs_2D.mp4
             - ...
         |- accessories-captions.json
-        |- run-parameters.json
         |- logs.txt
+        |- run-info.txt (only when running --attached=False)
+        |- run-parameters.json
 ```
 
 In addition to the model's output and accessory files, `runmodel` will write three other files:
 - accessories-captions.json : descriptions of the files in *accessories* 
 - logs.txt : the log output produced by this run
+- run-info.txt : model run information used by dojo. Includes docker container name and id.
 - run-parameters.json : the model parameters used for this run
 
 ### Examples

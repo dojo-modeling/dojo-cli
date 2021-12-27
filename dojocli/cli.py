@@ -226,6 +226,20 @@ def print_versions(model: str, versions: dict):
 def cli():
     pass
 
+@cli.command()
+@click.option("--id", type=str, help="the container id")
+@click.option("--name", type=str, help="the container name")
+@click.option("--config", type=str, default=".config", help="configuration json filename (defaults to .config)")
+def results(id, name, config):
+    """Get the results from a stopped model run container by either id or name."""
+
+    if (id is None and name is None):
+        click.echo('\nEither --id (container id) or --name (container name) is required.\n')
+        return
+    
+    dc = DojoClient(config)
+    dc.get_results(id, name)
+
 
 @cli.command()
 @click.option("--model", type=str, help="the model name e.g. CHIRPS-Monthly")
@@ -235,7 +249,7 @@ def describe(model, version, config):
     """Print a description of the model."""
 
     if (model is None and version is None):
-        click.echo('\neither --model or --version is required.\n')
+        click.echo('\nEither --model or --version is required.\n')
         return
 
     if version is None:
@@ -274,7 +288,7 @@ def outputs(model, config, version):
     """Print descriptions of the output and accessory files produced by a model."""
 
     if (model is None and version is None):
-        click.echo('\neither --model or --version is required.\n')
+        click.echo('\nEither --model or --version is required.\n')
         return
 
     if version is None:
@@ -301,7 +315,7 @@ def parameters(model, config, version):
     """Print the parameters required to run a model."""
     
     if (model is None and version is None):
-        click.echo('\neither --model or --version is required.\n')
+        click.echo('\nEither --model or --version is required.\n')
         return
 
     if version is None:
@@ -333,7 +347,7 @@ def runmodel(model, config, paramsfile, params, outputdir: str = None, version: 
 
     # Confirm options and params.
     if (model is None and version is None):
-        click.echo('\neither --model or --version is required.\n')
+        click.echo('\nEither --model or --version is required.\n')
         return
     elif params==None:
         # If --params json is not passed, then --paramsfile, or the default --paramsfile, must exist.
@@ -390,7 +404,6 @@ def versions(model, config):
 
     # Call a seperate print_versions function to keep things clean.
     print_versions(model, versions)
-
 
 if __name__ == "__main__":     
     cli()

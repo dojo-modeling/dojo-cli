@@ -4,6 +4,10 @@
 
 import click
 from datetime import datetime
+from docker.api import container
+
+from docker.api.volume import VolumeApiMixin
+#from requests.models import stream_decode_response_unicode
 from dojocli.docker_client import DockerClient
 from jinja2 import Template
 import json
@@ -25,7 +29,6 @@ class DojoClient(object):
                 click.echo(e.message)
             else:
                 click.echo(e)
-            exit
 
     def get_accessories(self, model_id: str):
         """
@@ -226,6 +229,57 @@ class DojoClient(object):
 
         return self.get_dojo_stuff('outputfile', model_id)
         
+    def get_results(self, id: str, name: str):
+        """
+        Description
+        -----------
+            Checks whether the container is still running. If the container has
+            stopped, the details for processing are gathered and passed to 
+            process_finished_model().
+
+            One of the parameters id and name is requried.
+        
+        Parameters
+        ----------
+            id: str
+                The container id.
+            name: str
+                The container name.
+        """
+        # Instantiate the Docker Client.
+        dc = DockerClient()
+   
+        is_running = dc.is_running(container_id = id, container_name = name)
+        if is_running is None:
+            return
+        if is_running:
+            click.echo(f'Results for {name if name is not None else id} are not yet ready.')
+        else:
+            # Docker commands accept either name or id.
+            container = name if name is not None else id
+
+            # Copy the local_output_folder.txt file from the stopped container.            
+            os.system(f"docker cp {container}:/home/clouseau/local_output_folder.txt {os.getcwd()}/runs/local_output_folder.txt")
+
+            # Read the local_output_folder location.
+            with open(f'{os.getcwd()}/runs/local_output_folder.txt', 'r') as fh:
+                local_output_folder = fh.readline()
+
+            # Read and process the run info.
+            with open(f'{local_output_folder}/run-info.txt', 'r') as fh:
+                for l in  fh.readlines():
+                    if l.startswith("output:"):
+                        output_paths = l.split('output:')[1].strip().split('\t')
+                    elif l.startswith("accessories:"):
+                        accessory_paths = l.split('accessories:')[1].strip().split('\t')
+
+            # Move all the model stuff.
+            self.process_finished_model(container_id=id, container_name=name, local_output_folder=local_output_folder,
+                output_paths=output_paths, accessory_paths=accessory_paths)
+    
+            # Clean up.
+            os.system(f'rm {os.getcwd()}/runs/local_output_folder.txt')
+
     def get_versions(self, model_name: str):
         """
         Description
@@ -266,6 +320,57 @@ class DojoClient(object):
             else:
                 click.echo(e)
             exit
+
+    def process_finished_model(self, container_id: str, container_name: str, local_output_folder: str, output_paths, accessory_paths):
+        """
+        Description
+        -----------
+            Process the finished model:
+            (1) copy logs
+            (2) write output and accessory files
+            (3) remove container
+
+        Parameters
+        ----------
+            container_id: str
+                Docker container id e.g. e76880c24933
+                Either this or container_name are required.
+            container_name: str
+                Docker container name e.g. dojo-stochasticgriddedconflictmodel20211227133418
+                Etiher this or container_id are required.
+            local_output_fodler: str
+                Path to the model output directory.
+            output_paths:
+                Docker container paths for output files.
+            accessory_paths:
+                Docker container paths for accessory files.
+            
+
+        """
+
+        # The docker commands will take either id or name.
+        container = container_id if container_id is not None else container_name
+
+        # Capture the container logs to file.
+        os.system(f"docker logs {container} > '{local_output_folder}/logs.txt'")
+
+        # Copy output files from the container to the local folder.
+        if len(output_paths) > 0:
+            os.makedirs(f'{local_output_folder}/output')
+        for path in output_paths:
+            os.system(f"docker cp {container}:'{path}' '{local_output_folder}/output/{os.path.basename(path)}'")
+
+        # Copy accessory files from the container to the local folder.
+        if len(accessory_paths) > 0:
+            os.makedirs(f'{local_output_folder}/accessories')
+        for path in accessory_paths:
+            os.system(f"docker cp {container}:'{path}' '{local_output_folder}/accessories/{os.path.basename(path)}'")
+            
+        # Nuke the container from orbit.
+        os.system(f"docker container rm {container}")
+
+        # A miracle occurred.
+        click.echo(f'\n\nRun completed.\nModel output, run-parameters, and log files are located in "{local_output_folder}".')
 
     def run_model(self, model_name: str, params: str = None, params_filename: str = None, version: str = None, 
         local_output_folder: str = None, run_attached: bool = True):
@@ -308,55 +413,34 @@ class DojoClient(object):
         if local_output_folder == None:
             local_output_folder = f'{os.getcwd()}/runs/{model_name}/{model_id}/{datetimestamp}'
 
-        # Create directory structure.
+        # Create main directory structure.
         os.makedirs(local_output_folder)
 
         # Get the metadata for this model. 
         metadata = self.get_metadata(model_id)
         
-        ### Begin building the array of volume mounts.
-        volume_array = []
-
-        # We have to be careful since we cannot mount the same directory (within the model container) more than once
-        # so if multiple output files reside in the same directory (which is common), we need to re-use that volume mount
-        output_dirs = set()
-
         # Process output file locations.
         outputfiles = metadata["outputfile"]
+        output_paths = []
         for output in outputfiles:
-            # Build a volume mount for this output file's directory.
+            # Build list of output file paths.
             output_dir = output['output_directory']
-            #output_id = output['id']
+            output_path = output['path']
+            output_paths.append(f'{output_dir}/{output_path}')
 
-            if output_dir not in output_dirs:
-                #output_dirs[output_dir] = output_id
-                output_dirs.add(output_dir)
-                # Use the lookup to build the path.
-                #output_dir_volume = local_output_folder + f"/{output_dirs[output_dir]}:{output_dir}"
-                output_dir_volume = local_output_folder + f"/output:{output_dir}"               
-                # Add it to the volume_array
-                volume_array.append(output_dir_volume)
-
-        # Process accessory file locations.
+        # Process accessory file locations and captions.
         accessory_files = metadata["accessories"]
-        accessory_dirs = {}
         accessory_captions = {}
+        accessory_paths = []
         for accessory_file in accessory_files:
-            # Build a volume mount for this accessory file's directory.
-            accessory_dir, accesssory_filename = os.path.split(accessory_file['path'])
+            # Build a list of accessory file locations.
+            accessory_file_path = accessory_file['path']
+            accessory_paths.append(accessory_file_path)
 
             # Capture accessory file captions so they can be written to file.
             if "caption" in accessory_file:
-                accessory_captions[accesssory_filename] = accessory_file["caption"]
+                accessory_captions[os.path.basename(accessory_file_path)] = accessory_file["caption"]
             
-            accessory_id = accessory_file['id']
-
-            if accessory_dir not in accessory_dirs:
-                accessory_dirs[accessory_dir] = accessory_id
-                # Use the lookup to build the path.
-                accessory_dir_volume = local_output_folder + f"/accessories:{accessory_dir}"
-                volume_array.append(accessory_dir_volume)
-
         # Load parameters.
         if params == None:
             # If params json not passed then read from file.
@@ -382,30 +466,10 @@ class DojoClient(object):
         click.echo(f'Getting model image ...\n')
         dc.pull_image(image_name)
 
-        # Begin constructing the command to pass to the container.
-        container_command = 'bash -c "'
-
-        # Work around for following:
-        # the volume_array output folders in the docker container are owned by root, not clouseau.
-        # Add these chown commands to the container_command.
-        for v in volume_array:
-            sa = v.split(":")
-            folder = sa[1]
-            container_command = container_command + f'sudo chown clouseau:clouseau {folder} ; '
-
         # Set run command from metadata["directive"]["command"] and substitute params.
         model_command = Template(metadata["directive"]["command"])
         model_command = model_command.render(params)
 
-        # In the model_command change any double quotes to escaped single quotes e.g.
-        # /bin/bash -c "export PYTHONPATH=/home/clouseau/flee: ; bash run_flee.sh"
-        # to
-        # /bin/bash -c \'export PYTHONPATH=/home/clouseau/flee: ; bash run_flee.sh\'
-        model_command = model_command.replace('"', "\'")
-        
-        # Add the model_command with a trailing quote (") to the container command.
-        container_command = container_command + f'{model_command}"'
-        
         # Create the container name.
         if model_name is None:
             container_name = f'dojo-{version[-12:]}{datetimestamp}'
@@ -413,37 +477,38 @@ class DojoClient(object):
             container_name = re.sub("[ \]\[,()_]", '', model_name.lower() ).strip()
             container_name = f'dojo-{container_name}{datetimestamp}'
 
-        # TODO: better explanations here.
         click.echo(f"\n\nRunning {model_name} version {model_id} in Docker container {container_name} ... \n")
         if run_attached:
             click.echo(f"The model is running attached; this process will wait until the run is completed.")
 
-            # Run the container.
-            logs = dc.create_container(image_name, volume_array, container_name, container_command)
-            
-            # Write the logs returned from the attached container.
-            with open(f'{local_output_folder}/logs.txt', 'w') as fh:
-                fh.writelines(logs)
+            # Run the container attached.
+            dc.create_container(image_name, container_name, model_command)
 
-            click.echo(f"\n\nRun completed.\nModel output, run-parameters, and log files are located in {local_output_folder}.")
+            # Perform the finishing steps e.g. logging.
+            self.process_finished_model(container_id=None, container_name=container_name, local_output_folder=local_output_folder,
+                output_paths=output_paths, accessory_paths=accessory_paths)
 
         else:
             click.echo(f"The model is running detached in background.")
-            click.echo(f"Model progress can be monitored by the following command: \"docker logs {container_name} -f\"")
+            click.echo(f"\nModel progress can be monitored by the following command: \"dojo results --name={container_name}\"\n")
         
-            # Run the container.
-            dc.create_container(image_name, volume_array, container_name, container_command, run_attached=False)
-            
-            # Write the logs, but these will probably be incomplete for the detached container.
-            # TODO: fix the log_config so it will stream.
-            logs = dc.get_logs(container_name)
-            with open(f'{local_output_folder}/logs.txt', 'wb') as fh:
-                fh.write(logs)
+            # Run the container detached.
+            container = dc.create_container(image_name, container_name, model_command, run_attached=False)
+        
+            # Write the output folder path to the container or we won't know it.
+            dc.execute_command(f'bash -c \'printf "{local_output_folder}" > /home/clouseau/local_output_folder.txt\'')
 
-            # Messaging for handling the detached container.
-            click.echo(f"When the run is completed, model output, run-parameters, and log files will be located in {local_output_folder}.")
-            click.echo(f"To see the final run log run the following commnad: \"docker logs {container_name}.\"")
-            click.echo(f'When the conatainer is finished running, the container can be removed with the following command: "docker container rm {container_name}".')
+            # Write the run information to the output folder to be read when
+            # processing the finished model run.
+            with open(f'{local_output_folder}/run-info.txt', 'w') as fh:
+                fh.write(f'Docker container name: {container_name}\n')
+                fh.write(f'Docker container id: {container.id}\n')
+                fh.write(f'Model ID: {model_id}\n')
+                fh.write(f'local_output_folder: {local_output_folder}\n')
+                outputs = "\t".join(output_paths)
+                fh.write(f'output: {outputs}\n')
+                accessories = "\t".join(accessory_paths)
+                fh.write(f'accessories: {accessories}\n')
 
     def set_config(self, config_filename):
         with open(config_filename) as f:
