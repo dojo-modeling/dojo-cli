@@ -281,7 +281,6 @@ class DojoClient(object):
                         accessory_paths = l.split("accessories:")[1].strip().split("\t")
 
             # Move all the model stuff.
-            print("hhhhhheeee")
             self.process_finished_model(
                 container_id=id,
                 container_name=name,
@@ -367,7 +366,6 @@ class DojoClient(object):
 
 
         """
-        print("start         sssssssssss")
         # The docker commands will take either id or name.
         container = container_id if container_id is not None else container_name
 
@@ -379,7 +377,6 @@ class DojoClient(object):
             os.makedirs(f"{local_output_folder}/output")
         for path in output_paths:
             if "*" in path:
-                print("/".join(path.split("/")[0:-1]))
                 os.system(
                     f"docker cp {container}:{'/'.join(path.split('/')[0:-1])}/. {local_output_folder}/output/"
                 )
@@ -441,7 +438,6 @@ class DojoClient(object):
                 Option to run the model detached (in background.)
 
         """
-        print("STASRRR")
 
         # Get the model_id and image from the model_name or version.
         model_dict = self.get_model_info(model_name, model_id=version)
