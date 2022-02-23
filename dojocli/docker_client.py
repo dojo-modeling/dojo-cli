@@ -43,17 +43,17 @@ class DockerClient(object):
         -------
             The created container either stopped or detached and running.
         """
-
+        volumes_list=[]
+        binds=[]
+        detached_volume_array=[]
+        for key in config_files:
+            binds.append(f'{key}:{config_files[key]}')
+            if config_files[key] not in volumes_list:
+                volumes_list.append(f'{config_files[key]}')
+                detached_volume_array.append(f'{key}:{config_files[key]}')
        
         if run_attached:         
             
-            volumes_list=[]
-            binds=[]
-            for key in config_files:
-                binds.append(f'{key}:{config_files[key]}')
-                if config_files[key] not in volumes_list:
-                    volumes_list.append(f'{config_files[key]}')
-
             # Create the container detached.
             self.container = self.api_client.create_container(image_name, command=container_command, name=container_name, detach=False,
                 host_config=self.api_client.create_host_config(auto_remove=False, binds=binds), volumes=volumes_list)
@@ -75,7 +75,7 @@ class DockerClient(object):
             return self.container
         else:
             # If running detached, client.containers.run returns the container object.
-            self.container = self.client.containers.run(image_name, command=container_command, stdin_open=True, stdout=True, detach=True, name=container_name)
+            self.container = self.client.containers.run(image_name, command=container_command, stdin_open=True, stdout=True,volumes=detached_volume_array, detach=True, name=container_name)
             return self.container
 
     def execute_command(self, model_command):
