@@ -18,7 +18,7 @@ class DockerClient(object):
         self.client = docker.from_env()
         self.container = None
 
-    def create_container(self, image_name, container_name, container_command, run_attached: bool = True):
+    def create_container(self, image_name, container_name, container_command, config_files, run_attached: bool = True):
         """
         Description
         -----------
@@ -46,10 +46,19 @@ class DockerClient(object):
 
        
         if run_attached:         
+            
+            volumes_list=[]
+            binds=[]
+            for key in config_files:
+                binds.append(f'{key}:{config_files[key]}')
+                if config_files[key] not in volumes_list:
+                    volumes_list.append(f'{config_files[key]}')
+
             # Create the container detached.
             self.container = self.api_client.create_container(image_name, command=container_command, name=container_name, detach=False,
-                host_config=self.api_client.create_host_config(auto_remove=False))
-        
+                host_config=self.api_client.create_host_config(auto_remove=False, binds=binds), volumes=volumes_list)
+
+
             # Start the container.
             self.api_client.start(self.container)
 

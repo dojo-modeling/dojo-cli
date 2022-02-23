@@ -418,7 +418,7 @@ class DojoClient(object):
 
         # Get the metadata for this model. 
         metadata = self.get_metadata(model_id)
-        
+        print(metadata['config'])
         # Process output file locations.
         outputfiles = metadata["outputfile"]
         output_paths = []
@@ -450,13 +450,32 @@ class DojoClient(object):
             # If params was passed in the command line it is a str; convert to dict.
             params = json.loads(params)
 
+        # get config files and hydrate them
+        config_dict={}
+        for configFile in metadata['config']:
+            try:
+                s3_url=configFile['s3_url']
+                response = requests.get(s3_url)
+                config_file_template = Template(response.text)
+                config_rehydrated = config_file_template.render(params)
+                if not os.path.isdir('temp'):
+                    os.mkdir('temp')
+                
+                temp_file_name=os.getcwd()+'/temp/temp_'+configFile['path'].split('/')[-1]
+                config_dict.update({temp_file_name:configFile["path"]})
+                with open(temp_file_name,"w") as f:
+                    f.write(config_rehydrated)
+
+            except Exception as e:
+                print(f'error getting config files {e}')
+
         # Write the parameters used out to the run result directory.
         with open(f'{local_output_folder}/run-parameters.json', 'w') as fh:
             json.dump(params, fh, indent=4)
 
         # Write accessory file captions to the run result directory.
         if len(accessory_captions) > 0:
-            with open(f'{local_output_folder}/accessories-captions.json', 'w') as fh:
+            with open(f'./{local_output_folder}/accessories-captions.json', 'w') as fh:
                 json.dump(accessory_captions, fh, indent=4)
      
         # Instantiate the Docker Client.
@@ -482,7 +501,7 @@ class DojoClient(object):
             click.echo(f"The model is running attached; this process will wait until the run is completed.")
 
             # Run the container attached.
-            dc.create_container(image_name, container_name, model_command)
+            dc.create_container(image_name, container_name, model_command, config_dict)
 
             # Perform the finishing steps e.g. logging.
             self.process_finished_model(container_id=None, container_name=container_name, local_output_folder=local_output_folder,
@@ -493,7 +512,7 @@ class DojoClient(object):
             click.echo(f"\nModel progress can be monitored by the following command: \"dojo results --name={container_name}\"\n")
         
             # Run the container detached.
-            container = dc.create_container(image_name, container_name, model_command, run_attached=False)
+            container = dc.create_container(image_name, container_name, model_command, config_dict, run_attached=False)
         
             # Write the output folder path to the container or we won't know it.
             dc.execute_command(f'bash -c \'printf "{local_output_folder}" > /home/clouseau/local_output_folder.txt\'')
