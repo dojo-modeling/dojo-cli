@@ -418,7 +418,7 @@ class DojoClient(object):
 
         # Get the metadata for this model. 
         metadata = self.get_metadata(model_id)
-        print(metadata['config'])
+
         # Process output file locations.
         outputfiles = metadata["outputfile"]
         output_paths = []
@@ -475,7 +475,7 @@ class DojoClient(object):
 
         # Write accessory file captions to the run result directory.
         if len(accessory_captions) > 0:
-            with open(f'./{local_output_folder}/accessories-captions.json', 'w') as fh:
+            with open(f'{local_output_folder}/accessories-captions.json', 'w') as fh:
                 json.dump(accessory_captions, fh, indent=4)
      
         # Instantiate the Docker Client.
