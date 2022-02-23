@@ -9,6 +9,7 @@ import docker
 import click
 from docker.api.volume import VolumeApiMixin
 from tqdm import tqdm
+import fnmatch
 
 
 class DockerClient(object):
@@ -49,7 +50,6 @@ class DockerClient(object):
         -------
             The created container either stopped or detached and running.
         """
-    
 
         if run_attached:
             # attached volumes
@@ -241,3 +241,26 @@ class DockerClient(object):
         """
 
         self.api_client.remove_container(container_name)
+
+    def container_diff(self, container_name):
+        """
+        Description
+        -----------
+        Return files changed in container from model run
+        """
+        return self.api_client.diff(container_name)
+
+    def match_pattern_output_path(self, container_name, outputs):
+        """
+        Description
+        -----------
+        Return new output paths accounting for wildcards
+        """
+        array_of_files = self.container_diff(container_name)
+        new_outputs = []
+        for output in outputs:
+            for file_changed in array_of_files:
+                if fnmatch.fnmatch(file_changed.get("Path", ""), output):
+                    new_outputs.append(file_changed.get("Path"))
+
+        return new_outputs

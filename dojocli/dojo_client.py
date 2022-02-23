@@ -366,7 +366,6 @@ class DojoClient(object):
 
 
         """
-
         # The docker commands will take either id or name.
         container = container_id if container_id is not None else container_name
 
@@ -545,12 +544,17 @@ class DojoClient(object):
             # Run the container attached.
             dc.create_container(image_name, container_name, model_command, config_dict)
 
+            # account for wildcard output files
+            wildcard_outputs = dc.match_pattern_output_path(
+                container_name, output_paths
+            )
+
             # Perform the finishing steps e.g. logging.
             self.process_finished_model(
                 container_id=None,
                 container_name=container_name,
                 local_output_folder=local_output_folder,
-                output_paths=output_paths,
+                output_paths=wildcard_outputs,
                 accessory_paths=accessory_paths,
             )
 
