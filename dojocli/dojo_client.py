@@ -376,14 +376,9 @@ class DojoClient(object):
         if len(output_paths) > 0:
             os.makedirs(f"{local_output_folder}/output")
         for path in output_paths:
-            if "*" in path:
-                os.system(
-                    f"docker cp {container}:{'/'.join(path.split('/')[0:-1])}/. {local_output_folder}/output/"
-                )
-            else:
-                os.system(
-                    f"docker cp {container}:'{path}' '{local_output_folder}/output/{os.path.basename(path)}'"
-                )
+            os.system(
+                f"docker cp {container}:'{path}' '{local_output_folder}/output/{os.path.basename(path)}'"
+            )
 
         # Copy accessory files from the container to the local folder.
         if len(accessory_paths) > 0:
@@ -549,12 +544,17 @@ class DojoClient(object):
             # Run the container attached.
             dc.create_container(image_name, container_name, model_command, config_dict)
 
+            # account for wildcard output files
+            wildcard_outputs = dc.match_pattern_output_path(
+                container_name, output_paths
+            )
+
             # Perform the finishing steps e.g. logging.
             self.process_finished_model(
                 container_id=None,
                 container_name=container_name,
                 local_output_folder=local_output_folder,
-                output_paths=output_paths,
+                output_paths=wildcard_outputs,
                 accessory_paths=accessory_paths,
             )
 
