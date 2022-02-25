@@ -2,4 +2,4 @@
 
 __author__ = """Robnet Kerns"""
 __email__ = "robnet@jataware.com"
-__version__ = "0.1.5"
+__version__ = "0.1.6"
