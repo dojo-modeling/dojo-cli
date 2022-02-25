@@ -49,6 +49,6 @@ setup(
     packages=find_packages(include=["dojocli", "dojocli.*"]),
     test_suite="tests",
     url="https://github.com/dojo-modeling/dojo-cli",
-    version='0.1.6',
+    version='0.1.7',
     zip_safe=False,
 )
