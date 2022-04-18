@@ -530,7 +530,7 @@ class DojoClient(object):
         if model_name is None:
             container_name = f"dojo-{version[-12:]}{datetimestamp}"
         else:
-            container_name = re.sub("[ \]\[,()_]", "", model_name.lower()).strip()
+            container_name = re.sub("[ \]\[,()_:]", "", model_name.lower()).strip()
             container_name = f"dojo-{container_name}{datetimestamp}"
 
         click.echo(
