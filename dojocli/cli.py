@@ -76,7 +76,7 @@ def print_outputs(model: str, version: str, outputfile_dict: dict, accessories_d
 
     click.echo()
 
-def print_params(model_dict: dict, params_filename: str = 'params_template.json'):
+def print_params(model_dict: dict, dc: DojoClient, params_filename: str = 'params_template.json'):
     """
     Description
     -----------
@@ -88,104 +88,57 @@ def print_params(model_dict: dict, params_filename: str = 'params_template.json'
     ----------
     model_dict: dict
         Model metadata returned by dojo_client.get_model_info()
+    dc: DojoClient
+        The client that fetches the parameters from the API.
     params_filename:
-            Filename for params template file. Defaults to "params.json".
+        Filename for params template file. Defaults to "params.json".
 
     """
 
     output_params = {}
+    model_id, model_name = (model_dict["id"], model_dict["name"])
     # (1) Parse the parameters name, description etc. from metadata retrived via dojo_api/models
-    if "parameters" in model_dict:
-        for idx, p in enumerate(model_dict["parameters"]):
-            param_name = p["name"]
-            param_default = p["default"]
-            param_type = p['type']
+    for idx, param in enumerate(dc.get_parameters(model_id)):
+        annot = param['annotation']
+        param_name = annot['name']
+        param_default = annot['default_value']
+        param_type = annot['type']
 
-            # Add param names and defaults to output dictionary, correcting for
-            # type (not data_type).
-            # Massive leap of faith here that the param type is correct.
-            if (param_type == 'float' or param_type == 'numerical'):
-                try:
-                    output_params[param_name] = float(param_default)
-                except Exception:
-                    output_params[param_name] = param_default 
-            elif (param_type == 'int' or param_type == 'integer'):
-                try:
-                    output_params[param_name] = int(param_default)
-                except Exception:
-                    output_params[param_name] = param_default
-            else:
+        # Add param names and defaults to output dictionary, correcting for
+        # type (not data_type).
+        # Massive leap of faith here that the param type is correct.
+        if (param_type == 'float' or param_type == 'numerical'):
+            try:
+                output_params[param_name] = float(param_default)
+            except Exception:
+                output_params[param_name] = param_default 
+        elif (param_type == 'int' or param_type == 'integer'):
+            try:
+                output_params[param_name] = int(param_default)
+            except Exception:
                 output_params[param_name] = param_default
+        else:
+            output_params[param_name] = param_default
 
-            click.echo(f"Parameter {idx+1}     : {p['display_name']}")
-            click.echo("Description     : " + str(p['description']).replace('\n',' '))
-            click.echo(f"Type            : {p['type']}")
-            click.echo(f"Unit            : {p['unit']}")
-            click.echo(f"Unit Description: {p['unit_description']}")
-            click.echo(f"Default Value   : {p['default']}")
-            click.echo()
+        click.echo(f"Parameter {idx+1}     : {annot['name']}")
+        click.echo("Description     : " + str(annot['description']).replace('\n',' '))
+        click.echo(f"Type            : {annot['type']}")
+        click.echo(f"Unit            : {annot['unit']}")
+        click.echo(f"Unit Description: {annot['unit_description']}")
+        click.echo(f"Default Value   : {annot['default_value']}")
+        click.echo()
 
-        # Reprint default parameter as examples.
-        click.echo('Example parameters:')
-        for k, v in output_params.items():
-            click.echo(f'{k}: {v}')
+    # Reprint default parameter as examples.
+    click.echo('Example parameters:')
+    for k, v in output_params.items():
+        click.echo(f'{k}: {v}')
 
-        # Write the output_params as a template to file.
-        with open(params_filename, 'w') as f:
-            json.dump(output_params, f, indent=4)
+    # Write the output_params as a template to file.
+    with open(params_filename, 'w') as f:
+        json.dump(output_params, f, indent=4)
 
-        click.echo(f"\nExample {model_dict['name']} version {model_dict['id']} template parameters file written to {params_filename}.")
+    click.echo(f"\nExample {model_name} version {model_id} template parameters file written to {params_filename}.")
 
-    else:
-        click.echo(f'\nNo model run parameters found for {model_dict["name"]} version {model_dict["id"]}.\n')
-    """        
-        # or parse command parameters from the 'command_raw' directive.
-        elif 'directive' in metadata:
-            directive = metadata['directive']
-            if (not directive == None 
-                and "command_raw" in directive 
-                and directive["command_raw"] != ""
-                and "command" in directive):
-
-                command_raw = directive["command_raw"]
-                command = directive["command"]
-                click.echo('\nExample parameters:\n')
-        
-                for param_name in param_type_dict:
-                    if not command.__contains__(param_name):
-                        continue
-                    # Find the token before the param_name.
-                    # For example, the parameter bounding_box in the CHIRPS models.
-                    # command:     python3 run_chirps_tiff.py --name=CHIRPS --month={{ month }} --year={{ year }} --bbox='{{ bounding_box }}'
-                    splitter = "{{ " + param_name + " }}"
-                    sa = command.split(splitter) 
-                    # sa[0] = "python3 run_chirps_tiff.py --name=CHIRPS --month={{ month }} --year={{ year }} --bbox='{{ "
-                    # Strip trailing whitespace from sa[0] and any single quotes.
-                    param_marker =  re.sub("[']", "", sa[0].strip())
-                    # Now param_marker = bounding_box python3 run_chirps_tiff.py --name=CHIRPS --month={{ month }} --year={{ year }} --bbox=
-                    # Next split on a space, and take the last symbol in the array.
-                    sa = param_marker.split(" ")
-                    param_marker = sa[-1] 
-                    # In this example, param_marker is now --bbox=; we can use that to parse command_raw to get an example parameter.
-                    # command_raw: python3 run_chirps_tiff.py --name=CHIRPS --month=01 --year=2021 --bbox='[[33.512234, 2.719907], [49.98171,16.501768]]'               
-                    sa = command_raw.split(param_marker)
-                    param_value = sa[1] 
-                    # param_example = '[[33.512234, 2.719907], [49.98171,16.501768]]'
-                    # In other instances, there may be trailing params in param_example,
-                    # e.g. for CHIRPS model param month where the param_example would
-                    # be: 
-                    # 01 --year=2021 --bbox='[[33.512234, 2.719907], [49.98171,16.501768]]'
-                    # in this example.
-                    # Use the shlex library to split on spaces but not inside quotes.
-                    # Strip the quotes via posix=True (default setting for shlex)
-                    param_value = shlex.split(param_value, posix=True)[0].strip()                       
-                    output_params[param_name] = param_value
-
-                    click.echo(f'{param_name}: {param_value}')        
-            else:
-                for param_name in param_type_dict:
-                    output_params[param_name] = ""
-    """
         
 def print_versions(model: str, versions: dict):
     """
@@ -331,7 +284,7 @@ def parameters(model, config, version):
         return
 
     # Call a seperate print_params function to keep things clean.
-    print_params(model_dict)
+    print_params(model_dict, dc)
 
 
 @cli.command()
