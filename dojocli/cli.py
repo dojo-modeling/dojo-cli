@@ -10,7 +10,7 @@ from dojocli.dojo_client import DojoClient
 import json
 
 
-def print_description(model_dict: dict):
+def print_description(model_dict: dict, param_dicts: dict):
     """
     Description
     -----------
@@ -42,8 +42,8 @@ def print_description(model_dict: dict):
     click.echo(f'DOCKER IMAGE\n------------\n{model_dict["image"]}\n')
 
     click.echo('PARAMETERS\n----------')
-    for param_dict in model_dict["parameters"]:
-        click.echo(param_dict["display_name"])
+    for param_dict in param_dicts:
+        click.echo(param_dict["annotation"]["name"])
 
     click.echo()
 
@@ -212,12 +212,13 @@ def describe(model, version, config):
 
     dc = DojoClient(config)
     model_dict = dc.get_model_info(model, version)
+    param_dicts = dc.get_parameters(model_dict["id"])
 
     if (model_dict == None):
         click.echo(f"\n No meta data is available for this model.\n")
         return
 
-    print_description(model_dict)
+    print_description(model_dict, param_dicts)
 
 
 @cli.command()
@@ -306,7 +307,7 @@ def runmodel(model, config, paramsfile, params, outputdir: str = None, version: 
         # If --params json is not passed, then --paramsfile, or the default --paramsfile, must exist.
         # Try opening the file before running the model.
         if not exists(paramsfile):
-            click.echo("\n--paramfile not found and --params is blank.\nOne of either --paramfile or --params is required.\n")
+            click.echo("\n--paramsfile not found and --params is blank.\nOne of either --paramsfile or --params is required.\n")
             return
 
     dc = DojoClient(config)

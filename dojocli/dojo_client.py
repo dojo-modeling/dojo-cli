@@ -10,12 +10,12 @@ from docker.api.volume import VolumeApiMixin
 
 # from requests.models import stream_decode_response_unicode
 from dojocli.docker_client import DockerClient
-from subprocess import Popen, PIPE, run
+from io import BytesIO
+from tarfile import open as tar_open
 import json
 import os
 import re
 import requests
-import tarfile
 
 
 class DojoClient(object):
@@ -278,9 +278,9 @@ class DojoClient(object):
                 The container name.
         """
         # Instantiate the Docker Client.
-        dockerc = DockerClient()
+        docker_client = DockerClient()
 
-        is_running = dockerc.is_running(container_id=id, container_name=name)
+        is_running = docker_client.is_running(container_id=id, container_name=name)
         if is_running is None:
             return
         if is_running:
@@ -344,21 +344,29 @@ class DojoClient(object):
             Content of the file as a string.
         """
 
-        # The docker commands will take either id or name.
-        dockerc = DockerClient()
+        docker_client = DockerClient()
 
-        # Create a container where we can extract by directly using docker lib
-        container = dockerc.api_client.create_container(
+        container = docker_client.client.containers.create(
             image_name, 
+            command='echo -n "Do nothing!"',
             detach=False
         )
+        file_contents_stream, info = container.get_archive(path)
 
-        with tarfile.open(fileobj=container.get_archive(path)[0], mode="r|") as file:
-            content = file.read().decode()
+        print(f'Copying "{info["name"]}" into memory')
+        file_contents = BytesIO()
+        for chunk in file_contents_stream:
+            file_contents.write(chunk)
 
-        # Cleanup container.
+
+        file_contents.seek(0)
+        with tar_open(fileobj=file_contents, mode="r:") as tar:
+            config_filehandle = os.path.basename(path)
+            extracted_contents = tar.extractfile(config_filehandle)
+            config_content = extracted_contents.read().decode()
+
         container.remove(force=True)
-        return content
+        return config_content
 
 
     def get_versions(self, model_name: str):
@@ -581,7 +589,7 @@ class DojoClient(object):
                     f.write(config_rehydrated)
 
             except Exception as e:
-                print(f"error getting config files {e}")
+                print(f"error getting config files: {e}")
 
         # Write the parameters used out to the run result directory.
         with open(f"{local_output_folder}/run-parameters.json", "w") as fh:
@@ -593,11 +601,11 @@ class DojoClient(object):
                 json.dump(accessory_captions, fh, indent=4)
 
         # Instantiate the Docker Client.
-        dockerc = DockerClient()
+        docker_client = DockerClient()
 
         # Pull the image
         click.echo(f"Getting model image ...\n")
-        dockerc.pull_image(image_name)
+        docker_client.pull_image(image_name)
 
         # Set run command from metadata["directive"]["command"] and substitute params.
         model_command = replace_along_params(metadata["directive"]["command"], params, metadata["directive"]["parameters"])
@@ -618,10 +626,10 @@ class DojoClient(object):
             )
 
             # Run the container attached.
-            dockerc.create_container(image_name, container_name, model_command, config_dict)
+            docker_client.create_container(image_name, container_name, model_command, config_dict)
 
             # account for wildcard output files
-            wildcard_outputs = dockerc.match_pattern_output_path(
+            wildcard_outputs = docker_client.match_pattern_output_path(
                 container_name, output_paths
             )
 
@@ -641,7 +649,7 @@ class DojoClient(object):
             )
 
             # Run the container detached.
-            container = dockerc.create_container(
+            container = docker_client.create_container(
                 image_name,
                 container_name,
                 model_command,
@@ -650,7 +658,7 @@ class DojoClient(object):
             )
 
             # Write the output folder path to the container or we won't know it.
-            dockerc.execute_command(
+            docker_client.execute_command(
                 f"bash -c 'printf \"{local_output_folder}\" > /home/clouseau/local_output_folder.txt'"
             )
 
