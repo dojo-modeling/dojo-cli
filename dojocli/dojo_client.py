@@ -10,7 +10,8 @@ from docker.api.volume import VolumeApiMixin
 
 # from requests.models import stream_decode_response_unicode
 from dojocli.docker_client import DockerClient
-from jinja2 import Template
+from io import BytesIO
+from tarfile import open as tar_open
 import json
 import os
 import re
@@ -31,6 +32,7 @@ class DojoClient(object):
             else:
                 click.echo(e)
 
+
     def get_accessories(self, model_id: str):
         """
         Description
@@ -44,6 +46,7 @@ class DojoClient(object):
         """
 
         return self.get_dojo_stuff("accessories", model_id)
+
 
     def get_available_models(self):
         """
@@ -80,6 +83,7 @@ class DojoClient(object):
                 click.echo(response.text)
             exit
 
+
     def get_dojo_stuff(self, stuff, model_id):
         """
         Get stuff(config, directive, accessories, outputfiles) based on model_id.
@@ -95,6 +99,7 @@ class DojoClient(object):
             else:
                 click.echo(e)
             exit
+
 
     def get_metadata(self, model_id: str):
         """
@@ -129,6 +134,7 @@ class DojoClient(object):
             metadata[stuff] = self.get_dojo_stuff(stuff, model_id)
 
         return metadata
+
 
     def get_model_info(self, model_name: str, model_id: str = None):
         """
@@ -180,6 +186,26 @@ class DojoClient(object):
                 click.echo(e)
             exit
 
+
+    def get_parameters(self, model_id: str):
+        """
+        TODO
+        """
+        url = f'{self.dojo_url}/dojo/parameters/{model_id}'
+        try:
+            response = self.generic_dojo_get_request(url)
+            return response.json()
+
+        except Exception as e:
+            if hasattr(e, "message"):
+                click.echo(e.message)
+            else:
+                click.echo(e)
+            exit
+
+
+
+
     def get_model_versions_with_images(self, model_name: str):
         """
         Description
@@ -218,6 +244,7 @@ class DojoClient(object):
                 click.echo(e)
             exit
 
+
     def get_outputfiles(self, model_id: str):
         """
         Description
@@ -231,6 +258,7 @@ class DojoClient(object):
         """
 
         return self.get_dojo_stuff("outputfile", model_id)
+
 
     def get_results(self, id: str, name: str):
         """
@@ -250,9 +278,9 @@ class DojoClient(object):
                 The container name.
         """
         # Instantiate the Docker Client.
-        dc = DockerClient()
+        docker_client = DockerClient()
 
-        is_running = dc.is_running(container_id=id, container_name=name)
+        is_running = docker_client.is_running(container_id=id, container_name=name)
         if is_running is None:
             return
         if is_running:
@@ -291,6 +319,55 @@ class DojoClient(object):
 
             # Clean up.
             os.system(f"rm {os.getcwd()}/runs/local_output_folder.txt")
+
+
+    # TODO: Make this a more generalized function so it can be used with outputfiles
+    def get_config_content(
+         self,
+         image_name: str,
+         path: str,
+    ):
+        """
+        Description
+        -----------
+            Grabs the content
+
+        Parameters
+        ----------
+            image_name: str
+                The name of the image to generate the docker container
+            path: str
+                The path where the config file is located
+
+        Returns
+        ----------
+            Content of the file as a string.
+        """
+
+        docker_client = DockerClient()
+
+        container = docker_client.client.containers.create(
+            image_name, 
+            command='echo -n "Do nothing!"',
+            detach=False
+        )
+        file_contents_stream, info = container.get_archive(path)
+
+        print(f'Copying "{info["name"]}" into memory')
+        file_contents = BytesIO()
+        for chunk in file_contents_stream:
+            file_contents.write(chunk)
+
+
+        file_contents.seek(0)
+        with tar_open(fileobj=file_contents, mode="r:") as tar:
+            config_filehandle = os.path.basename(path)
+            extracted_contents = tar.extractfile(config_filehandle)
+            config_content = extracted_contents.read().decode()
+
+        container.remove(force=True)
+        return config_content
+
 
     def get_versions(self, model_name: str):
         """
@@ -485,26 +562,34 @@ class DojoClient(object):
             # If params was passed in the command line it is a str; convert to dict.
             params = json.loads(params)
 
+
+        def replace_along_params(string, new_values, available_parameters):
+            # Assuming no overlap
+            for param in sorted(available_parameters, key = lambda param: param['start'], reverse=True):
+                name = param["annotation"]["name"]
+                value = new_values[name] if name in new_values else param["annotation"]["default_value"]
+                string = string[:param["start"]] + str(value) + string[param["end"]:]
+            return string
+
+
         # get config files and hydrate them
         config_dict = {}
-        for configFile in metadata["config"]:
+        for config_file in metadata["config"]:
             try:
-                s3_url = configFile["s3_url"]
-                response = requests.get(s3_url)
-                config_file_template = Template(response.text)
-                config_rehydrated = config_file_template.render(params)
+                config_content = self.get_config_content(image_name, config_file["path"])
+                config_rehydrated = replace_along_params(config_content, params, config_file["parameters"])
                 if not os.path.isdir("temp"):
                     os.mkdir("temp")
 
                 temp_file_name = (
-                    os.getcwd() + "/temp/temp_" + configFile["path"].split("/")[-1]
+                    os.getcwd() + "/temp/temp_" + config_file["path"].split("/")[-1]
                 )
-                config_dict.update({temp_file_name: configFile["path"]})
+                config_dict.update({temp_file_name: config_file["path"]})
                 with open(temp_file_name, "w") as f:
                     f.write(config_rehydrated)
 
             except Exception as e:
-                print(f"error getting config files {e}")
+                print(f"error getting config files: {e}")
 
         # Write the parameters used out to the run result directory.
         with open(f"{local_output_folder}/run-parameters.json", "w") as fh:
@@ -516,15 +601,14 @@ class DojoClient(object):
                 json.dump(accessory_captions, fh, indent=4)
 
         # Instantiate the Docker Client.
-        dc = DockerClient()
+        docker_client = DockerClient()
 
         # Pull the image
         click.echo(f"Getting model image ...\n")
-        dc.pull_image(image_name)
+        docker_client.pull_image(image_name)
 
         # Set run command from metadata["directive"]["command"] and substitute params.
-        model_command = Template(metadata["directive"]["command"])
-        model_command = model_command.render(params)
+        model_command = replace_along_params(metadata["directive"]["command"], params, metadata["directive"]["parameters"])
 
         # Create the container name.
         if model_name is None:
@@ -542,10 +626,10 @@ class DojoClient(object):
             )
 
             # Run the container attached.
-            dc.create_container(image_name, container_name, model_command, config_dict)
+            docker_client.create_container(image_name, container_name, model_command, config_dict)
 
             # account for wildcard output files
-            wildcard_outputs = dc.match_pattern_output_path(
+            wildcard_outputs = docker_client.match_pattern_output_path(
                 container_name, output_paths
             )
 
@@ -565,7 +649,7 @@ class DojoClient(object):
             )
 
             # Run the container detached.
-            container = dc.create_container(
+            container = docker_client.create_container(
                 image_name,
                 container_name,
                 model_command,
@@ -574,7 +658,7 @@ class DojoClient(object):
             )
 
             # Write the output folder path to the container or we won't know it.
-            dc.execute_command(
+            docker_client.execute_command(
                 f"bash -c 'printf \"{local_output_folder}\" > /home/clouseau/local_output_folder.txt'"
             )
 
